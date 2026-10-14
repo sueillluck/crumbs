@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BuildWatch Site Operations Console</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #ecefe6;
+      --card-bg: #f8faf6;
+      --text-main: #141c1e;
+      --text-muted: #536467;
+      --border: #ccd6d3;
+      --accent: #11626d;
+      --accent-hover: #0c4a52;
+      --green: #238551;
+      --amber: #cb7e00;
+      --red: #c53429;
+      --sidebar-bg: #141c1e;
+      --sidebar-text: #e2ece9;
+      --sidebar-active: #1a7885;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1618;
+        --card-bg: #162023;
+        --text-main: #e6eff0;
+        --text-muted: #8b9ea1;
+        --border: #28373b;
+        --accent: #4eb6c4;
+        --accent-hover: #67c5d2;
+        --green: #34a86b;
+        --amber: #e59316;
+        --red: #e04b40;
+        --sidebar-bg: #0a0f11;
+        --sidebar-text: #d8e6e8;
+        --sidebar-active: #205057;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text-main); font: 400 15px/1.5 'Barlow', system-ui, sans-serif; }
+    h1, h2, h3 { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    h1 { font-size: 24px; }
+    h2 { font-size: 24px; margin-bottom: 12px; }
+    h3 { font-size: 18px; margin-bottom: 8px; color: var(--accent); }
+    
+    .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+    .sidebar { background: var(--sidebar-bg); color: var(--sidebar-text); padding: 20px 14px; display: flex; flex-direction: column; }
+    .sidebar h1 { color: #fff; display: flex; align-items: center; gap: 8px; }
+    .sidebar .role-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: rgba(255,255,255,0.1); margin-top: 4px; text-transform: uppercase; }
+    .nav-group { margin-top: 24px; display: flex; flex-direction: column; gap: 4px; flex-grow: 1; }
+    .sidebar button { width: 100%; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 10px 12px; border-radius: 6px; cursor: pointer; transition: background 0.15s ease; }
+    .sidebar button:hover { background: rgba(255,255,255,0.06); }
+    .sidebar button.on { background: var(--sidebar-active); color: #fff; font-weight: 500; }
+    
+    .main { padding: 24px; max-width: 1250px; width: 100%; margin: 0 auto; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    
+    .b { background: var(--accent); color: #fff; border: 0; border-radius: 4px; padding: 8px 16px; cursor: pointer; font-weight: 500; transition: background 0.15s ease; }
+    .b:hover { background: var(--accent-hover); }
+    .b.o { background: transparent; color: var(--text-main); border: 1px solid var(--border); }
+    .b.o:hover { background: rgba(0,0,0,0.03); }
+    .b.danger { background: var(--red); color: #fff; }
+    .b.warn { background: var(--amber); color: #fff; }
+    .b:disabled { opacity: 0.45; cursor: not-allowed; }
+    
+    input, select, textarea { background: var(--bg); border: 1px solid var(--border); color: var(--text-main); border-radius: 4px; padding: 7px 10px; font: inherit; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 12px; }
+    
+    .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 12px; color: #fff; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+    .banner { padding: 12px 16px; border-radius: 6px; font-weight: 500; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+    .banner.amber { background: #fff5e5; color: #8a5300; border: 1px solid #fedb99; }
+    .banner.red { background: #fdeeee; color: #9c1f17; border: 1px solid #f9b8b3; }
+    .big-num { font-family: 'Barlow Condensed', sans-serif; font-size: 46px; font-weight: 700; line-height: 1; }
+    .bar-bg { height: 10px; background: var(--bg); border-radius: 5px; overflow: hidden; margin: 6px 0; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.3s ease; }
+    .strip-24h { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; height: 26px; margin: 8px 0; }
+    .strip-24h div { border-radius: 2px; }
+    
+    #map-wrapper { margin-bottom: 20px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+    #map { height: 380px; width: 100%; }
+
+    .leaflet-div-icon.custom-map-pin {
+      background: transparent !important;
+      border: none !important;
+    }
+    
+    @media (max-width: 840px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; }
+      .nav-group { flex-direction: row; flex-wrap: wrap; width: 100%; margin-top: 12px; }
+      .nav-group button { width: auto; }
+    }
+    @media print {
+      .sidebar, .noprint, #map-wrapper, .b { display: none !important; }
+      .app { display: block; }
+      .card { border: 1px solid #ccc; box-shadow: none; break-inside: avoid; }
+      body { background: #fff; color: #000; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const cfg = {
+  dust: { amber: 80, red: 100 },
+  noise: { day: 75, eve: 65, night: 55 },
+  mist: { onSec: 60, waitSec: 120, maxMin: 10 },
+  flowRateLps: 0.25,
+  baselineTimer: { onSec: 60, intervalMin: 10, workHours: 10 }
+};
+
+const STAGES = ['Earthworks', 'Structure', 'Architectural', 'M&E', 'HVAC', 'Fire fighting', 'AHU', 'Testing & commissioning (MSB/SSB)', 'Handover'];
+
+const SITES = [
+  {
+    id: 'site-a',
+    name: 'Site A, landed phase 2',
+    type: 'Landed construction',
+    lat: 3.221, lng: 101.49,
+    dust: 60, noise: 62, hum: 68,
+    mode: 'auto', pump: false, tank: 850, tankMax: 1000,
+    lastRun: null, mistEnd: 0, cooldownEnd: 0,
+    stage: 'Earthworks', end: '2026-12-18', plan: 'Haul road watering, drainage trenching, and boundary misting.',
+    tasks: [{ t: 'Haul road watering', done: false }, { t: 'Drainage trench', done: false }, { t: 'Slope turfing', done: false }],
+    hist: Array.from({ length: 24 }, (_, i) => ({ d: Math.round(35 + Math.random() * 50 + (i >= 8 && i <= 17 ? 35 : 0)), n: Math.round(48 + Math.random() * 18 + (i >= 8 && i <= 17 ? 12 : 0)) })),
+    waterLog: [180, 210, 160, 240, 190, 220],
+    litresToday: 42
+  },
+  {
+    id: 'site-b',
+    name: 'Site B, terrace renovation',
+    type: 'Renovation',
+    lat: 3.2105, lng: 101.504,
+    dust: 35, noise: 58, hum: 75,
+    mode: 'auto', pump: false, tank: 420, tankMax: 1000,
+    lastRun: null, mistEnd: 0, cooldownEnd: 0,
+    stage: 'M&E', end: '2027-04-15', plan: 'Conduit install and material deliveries.',
+    tasks: [{ t: 'Conduit install', done: false }, { t: 'DB board delivery', done: false }],
+    hist: Array.from({ length: 24 }, (_, i) => ({ d: Math.round(25 + Math.random() * 40), n: Math.round(52 + Math.random() * 20 + (i >= 7 && i <= 19 ? 15 : 0)) })),
+    waterLog: [110, 140, 95, 120, 130, 105],
+    litresToday: 28
+  },
+  {
+    id: 'site-c',
+    name: 'Site C, commercial block',
+    type: 'Commercial',
+    lat: 3.198, lng: 101.485,
+    dust: 45, noise: 66, hum: 82,
+    mode: 'manual', pump: false, tank: 920, tankMax: 1000,
+    lastRun: null, mistEnd: 0, cooldownEnd: 0,
+    stage: 'Testing & commissioning (MSB/SSB)', end: '2026-12-05', plan: 'Substation energising and acoustic monitoring during test runs.',
+    tasks: [{ t: 'HVAC test run', done: false }, { t: 'Fire alarm test', done: false }, { t: 'MSB energising', done: false }],
+    hist: Array.from({ length: 24 }, (_, i) => ({ d: Math.round(45 + Math.random() * 60 + (i >= 9 && i <= 16 ? 45 : 0)), n: Math.round(50 + Math.random() * 15) })),
+    waterLog: [280, 310, 270, 340, 290, 330],
+    litresToday: 75
+  }
+];
+
+let dbEvents = [
+  { id: 'EV-801', siteId: 'site-c', time: Date.now() - 3600000, type: 'Dust Spike', before: '112 µg/m³', action: 'Auto Misting (60s cycle)', after: '68 µg/m³', litres: 15, outcome: 'Controlled' },
+  { id: 'EV-800', siteId: 'site-b', time: Date.now() - 7200000, type: 'Noise Breach', before: '78 dB(A)', action: 'Relocated generator behind barrier', after: '63 dB(A)', litres: 0, outcome: 'Compliance Restored' }
+];
+
+let currentUser = null;
+let activeTab = 'overview';
+let activeSiteId = 'site-a';
+let mapInstance = null;
+let mapMarkers = {};
+
+const $ = s => document.querySelector(s);
+const curSite = () => SITES.find(s => s.id === activeSiteId) || SITES[0];
+const getNoiseLimit = (hour = new Date().getHours()) => hour >= 7 && hour < 19 ? cfg.noise.day : hour >= 19 && hour < 22 ? cfg.noise.eve : cfg.noise.night;
+const getStatusTier = (dust, noise, nLimit) => {
+  const maxRatio = Math.max(dust / cfg.dust.red, noise / nLimit);
+  return maxRatio >= 1.0 ? 'red' : maxRatio >= 0.8 ? 'amber' : 'green';
+};
+const fmtDateTime = ts => new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+function telemetryEdgeLoop() {
+  const currentHour = new Date().getHours();
+  const noiseLimit = getNoiseLimit(currentHour);
+
+  SITES.forEach(s => {
+    s.dust = Math.max(12, Math.round(s.dust + (Math.random() * 10 - 5) + (s.id === 'site-c' && Math.random() < 0.1 ? 25 : 0)));
+    s.noise = Math.max(42, Math.min(94, Math.round(s.noise + (Math.random() * 6 - 3))));
+    s.hum = Math.max(45, Math.min(98, Math.round(s.hum + (Math.random() * 2 - 1))));
+
+    if (s.pump) {
+      const waterUsed = cfg.flowRateLps * 2;
+      s.tank = Math.max(0, s.tank - waterUsed);
+      s.litresToday += waterUsed;
+      s.dust = Math.max(15, Math.round(s.dust * 0.82));
+
+      if (Date.now() >= s.mistEnd || s.tank <= 0) {
+        stopMisting(s, s.tank <= 0 ? 'Water tank empty emergency shutoff' : 'Completed cycle');
+      }
+    } else {
+      if (s.mode === 'auto' && s.dust >= cfg.dust.red && Date.now() >= s.cooldownEnd && s.tank > 0) {
+        startMisting(s, 'Automated threshold trigger');
+      }
+    }
+  });
+
+  if (currentUser && !document.activeElement.matches('input, textarea, select')) {
+    renderView(true);
+  }
+}
+
+function startMisting(site, triggerReason) {
+  if (site.tank <= 0 || site.pump) return;
+  site.pump = true;
+  site.mistEnd = Date.now() + (cfg.mist.onSec * 1000);
+  site.currentIncident = {
+    id: 'EV-' + Math.floor(100 + Math.random() * 900),
+    siteId: site.id,
+    time: Date.now(),
+    type: 'Dust Spike',
+    before: `${site.dust} µg/m³`,
+    action: triggerReason,
+    litres: 0
+  };
+}
+
+function stopMisting(site, outcomeReason) {
+  site.pump = false;
+  site.lastRun = Date.now();
+  site.cooldownEnd = Date.now() + (cfg.mist.waitSec * 1000);
+  if (site.currentIncident) {
+    site.currentIncident.after = `${site.dust} µg/m³`;
+    site.currentIncident.litres = Math.round(cfg.mist.onSec * cfg.flowRateLps);
+    site.currentIncident.outcome = site.dust < cfg.dust.amber ? 'Controlled' : 'Elevated - Cycle Queued';
+    dbEvents.unshift(site.currentIncident);
+    site.currentIncident = null;
+  }
+}
+
+function login(role, siteId = 'site-a') {
+  currentUser = { role, siteId };
+  activeSiteId = siteId;
+  activeTab = 'overview';
+  mountShell();
+  renderView();
+}
+
+function logout() {
+  currentUser = null;
+  if (mapInstance) { 
+    try { mapInstance.remove(); } catch(e){}
+    mapInstance = null; 
+    mapMarkers = {};
+  }
+  mountLogin();
+}
+
+function mountLogin() {
+  $('#root').innerHTML = `
+    <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;">
+      <div class="card" style="max-width: 440px; width: 100%; padding: 28px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom: 8px;">
+          <div style="width:14px; height:14px; border-radius:3px; background:var(--accent);"></div>
+          <h1>BuildWatch Operations</h1>
+        </div>
+        <p style="color:var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+          Environmental Telemetry, IoT Mist Actuation, and Regulatory Compliance Console.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div>
+            <label style="font-size: 13px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 4px;">Role Profile</label>
+            <select id="login-role" style="width: 100%;" onchange="$('#site-picker-row').style.display = this.value === 'manager' ? 'block' : 'none'">
+              <option value="manager">Site Manager</option>
+              <option value="admin">SDP Admin</option>
+            </select>
+          </div>
+          <div id="site-picker-row">
+            <label style="font-size: 13px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 4px;">Assigned Site</label>
+            <select id="login-site" style="width: 100%;">
+              ${SITES.map(s => `<option value="${s.id}">${s.name} (${s.type})</option>`).join('')}
+            </select>
+          </div>
+          <button class="b" style="padding: 11px; margin-top: 6px;" onclick="login($('#login-role').value, $('#login-site').value)">
+            Sign in to Console
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function mountShell() {
+  const isAdmin = currentUser.role === 'admin';
+  $('#root').innerHTML = `
+    <div class="app">
+      <nav class="sidebar">
+        <div>
+          <h1>BuildWatch</h1>
+          <span class="role-badge">
+            ${isAdmin ? 'Central Admin' : 'Manager: ' + curSite().name}
+          </span>
+        </div>
+        <div class="nav-group">
+          <button data-tab="overview" onclick="switchTab('overview')">Map & Site Overview</button>
+          <button data-tab="detail" onclick="switchTab('detail')">Site Live Console</button>
+          <button data-tab="incidents" onclick="switchTab('incidents')">Incident Audit Log</button>
+          ${isAdmin ? `<button data-tab="settings" onclick="switchTab('settings')">Threshold Config</button>` : ''}
+        </div>
+        <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 14px;">
+          <button onclick="logout()" style="opacity: 0.7;">Sign out</button>
+        </div>
+      </nav>
+      <main class="main" id="workspace-container"></main>
+    </div>
+  `;
+}
+
+function switchTab(tabId) {
+  activeTab = tabId;
+  renderView();
+}
+
+function renderView(isPeriodicTick = false) {
+  const container = $('#workspace-container');
+  if (!container) return;
+
+  if (isPeriodicTick && activeTab === 'overview' && mapInstance) {
+    updateOverviewInPlace();
+    return;
+  }
+
+  let headerHtml = '';
+  if (currentUser.role === 'admin') {
+    headerHtml = `
+      <div class="card" style="padding: 10px 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-weight: 500; font-size: 14px;">Selected Site:</span>
+        <select style="min-width: 320px;" onchange="activeSiteId = this.value; renderView();">
+          ${SITES.map(s => `<option value="${s.id}" ${s.id === activeSiteId ? 'selected' : ''}>${s.name}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  }
+
+  if (activeTab === 'overview') {
+    container.innerHTML = headerHtml + renderOverviewView();
+    initMap();
+  } else {
+    if (mapInstance) {
+      try { mapInstance.remove(); } catch(e){}
+      mapInstance = null;
+      mapMarkers = {};
+    }
+    if (activeTab === 'detail') {
+      container.innerHTML = headerHtml + renderSiteDetailView();
+    } else if (activeTab === 'incidents') {
+      container.innerHTML = headerHtml + renderIncidentsView();
+    } else if (activeTab === 'settings') {
+      container.innerHTML = headerHtml + renderSettingsView();
+    }
+  }
+
+  document.querySelectorAll('.sidebar button[data-tab]').forEach(btn => {
+    btn.classList.toggle('on', btn.dataset.tab === activeTab);
+  });
+}
+
+function updateOverviewInPlace() {
+  const currentLimit = getNoiseLimit();
+  SITES.forEach(s => {
+    const tier = getStatusTier(s.dust, s.noise, currentLimit);
+    const markerColor = tier === 'green' ? '#238551' : tier === 'amber' ? '#cb7e00' : '#c53429';
+    if (mapMarkers[s.id]) {
+      const icon = L.divIcon({
+        className: 'custom-map-pin',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
+        popupAnchor: [0, -10],
+        html: `<div style="width:20px; height:20px; border-radius:50%; background:${markerColor}; border:3px solid #fff; box-shadow:0 0 6px rgba(0,0,0,0.4); cursor:pointer;"></div>`
+      });
+      mapMarkers[s.id].setIcon(icon);
+    }
+  });
+}
+
+function renderOverviewView() {
+  const currentLimit = getNoiseLimit();
+  return `
+    <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+      <h2>Project Monitoring Map & Site Matrix</h2>
+      <div style="font-size: 12px; color: var(--text-muted); background: rgba(0,0,0,0.04); border: 1px dashed var(--border); border-radius: 4px; padding: 4px 10px; display: inline-flex; align-items: center; gap: 6px;">
+        <span>ℹ️</span>
+        <span><b>Notice:</b> Readings are indicative edge sensor telemetry.</span>
+      </div>
+    </div>
+    <div id="map-wrapper"><div id="map"></div></div>
+    <div class="card">
+      <h3>Active Construction Sites</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Site Name</th>
+            <th>Work Stage</th>
+            <th>PM2.5 / Dust</th>
+            <th>Noise Level</th>
+            <th>Overall Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${SITES.map(s => {
+            const tier = getStatusTier(s.dust, s.noise, currentLimit);
+            const statusLabel = tier === 'green' ? 'Normal' : tier === 'amber' ? 'Warning (80%)' : 'Exceeded';
+            const statusColor = tier === 'green' ? 'var(--green)' : tier === 'amber' ? 'var(--amber)' : 'var(--red)';
+            return `
+              <tr>
+                <td><b>${s.name}</b><br><small style="color:var(--text-muted)">${s.type}</small></td>
+                <td>${s.stage}</td>
+                <td><span style="font-family:var(--font-mono); font-weight:600;">${s.dust}</span> µg/m³</td>
+                <td><span style="font-family:var(--font-mono); font-weight:600;">${s.noise}</span> dB(A)</td>
+                <td><span class="chip" style="background:${statusColor}">${statusLabel}</span></td>
+                <td>
+                  <button class="b o" style="padding: 4px 10px; font-size: 13px;" onclick="activeSiteId='${s.id}'; switchTab('detail');">
+                    Open Console
+                  </button>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function initMap() {
+  setTimeout(() => {
+    const mapEl = $('#map');
+    if (!mapEl) return;
+
+    if (mapInstance) {
+      try { mapInstance.remove(); } catch(e){}
+      mapInstance = null;
+      mapMarkers = {};
+    }
+
+    // Set center matching the site coordinates
+    mapInstance = L.map('map').setView([3.21, 101.495], 13);
+    
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(mapInstance);
+
+    const currentLimit = getNoiseLimit();
+    const bounds = [];
+
+    SITES.forEach((s, idx) => {
+      bounds.push([s.lat, s.lng]);
+      const tier = getStatusTier(s.dust, s.noise, currentLimit);
+      const markerColor = tier === 'green' ? '#238551' : tier === 'amber' ? '#cb7e00' : '#c53429';
+      
+      const icon = L.divIcon({
+        className: 'custom-map-pin',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
+        popupAnchor: [0, -10],
+        html: `<div style="width:20px; height:20px; border-radius:50%; background:${markerColor}; border:3px solid #fff; box-shadow:0 0 6px rgba(0,0,0,0.4); cursor:pointer;"></div>`
+      });
+
+      const popupContent = `
+        <div style="font-family:'Barlow',sans-serif; font-size:13px; line-height:1.4;">
+          <b style="font-size:15px; color:#11626d;">${s.name}</b><br>
+          <span style="color:#536467;">Type: ${s.type}</span><hr style="margin:6px 0; border:0; border-top:1px solid #ccd6d3;">
+          Dust: <b>${s.dust} µg/m³</b><br>
+          Noise: <b>${s.noise} dB(A)</b><br>
+          Misting: <b>${s.pump ? '⚡ Active' : 'Standby'}</b><br>
+          <button style="margin-top:6px; background:#11626d; color:#fff; border:0; border-radius:3px; padding:4px 8px; cursor:pointer;" 
+                  onclick="activeSiteId='${s.id}'; switchTab('detail');">
+            Open Console
+          </button>
+        </div>
+      `;
+
+      mapMarkers[s.id] = L.marker([s.lat, s.lng], { icon })
+        .addTo(mapInstance)
+        .bindPopup(popupContent);
+
+      if (idx === 0) {
+        mapMarkers[s.id].openPopup();
+      }
+    });
+
+    if (bounds.length > 0) {
+      mapInstance.fitBounds(bounds, { padding: [40, 40] });
+    }
+
+    mapInstance.invalidateSize();
+  }, 50);
+}
+
+function renderSiteDetailView() {
+  const s = curSite();
+  const currentHour = new Date().getHours();
+  const noiseLimit = getNoiseLimit(currentHour);
+  const tier = getStatusTier(s.dust, s.noise, noiseLimit);
+
+  return `
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 12px;">
+      <div>
+        <h2>${s.name}</h2>
+        <span style="color:var(--text-muted); font-size:14px;">Target Completion: <b>${s.end}</b> | Current Phase: <b>${s.stage}</b></span>
+      </div>
+    </div>
+
+    ${tier !== 'green' ? `
+      <div class="banner ${tier}">
+        <span>
+          <b>Regulatory Attention Required:</b> Telemetry exceeds ${tier === 'red' ? 'critical limits' : '80% amber threshold'} 
+          (Dust: ${s.dust} µg/m³, Noise: ${s.noise} dB(A), Threshold:${noiseLimit} dB(A)).
+        </span>
+        <button class="b ${tier === 'red' ? 'danger' : 'warn'}" style="padding: 4px 10px; font-size: 13px;" onclick="logSupervisorAction('Immediate site misting and equipment throttling')">
+          Acknowledge & Log Action
+        </button>
+      </div>
+    ` : ''}
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Dust Concentration (PM2.5 / PM10)</h3>
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <div class="big-num" style="color: ${s.dust >= cfg.dust.red ? 'var(--red)' : s.dust >= cfg.dust.amber ? 'var(--amber)' : 'var(--green)'}">
+            ${s.dust} <span style="font-size: 18px; color: var(--text-muted); font-weight: 400;">µg/m³</span>
+          </div>
+          <span style="font-size:13px; color:var(--text-muted)">Red Limit: <b>${cfg.dust.red} µg/m³</b></span>
+        </div>
+        <div class="bar-bg">
+          <div class="bar-fill" style="width: ${Math.min(100, (s.dust / cfg.dust.red) * 100)}%; background: ${s.dust >= cfg.dust.red ? 'var(--red)' : s.dust >= cfg.dust.amber ? 'var(--amber)' : 'var(--green)'};"></div>
+        </div>
+        <p style="font-size:13px; color:var(--text-muted); margin-top: 4px;">Humidity gate: <b>${s.hum}% RH</b> ${s.hum > 90 ? '(Spraying locked: Saturated atmosphere)' : '(Sensor reliable)'}</p>
+      </div>
+
+      <div class="card">
+        <h3>Acoustic Sound Level (LAeq 5-Min)</h3>
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <div class="big-num" style="color: ${s.noise >= noiseLimit ? 'var(--red)' : s.noise >= noiseLimit * 0.8 ? 'var(--amber)' : 'var(--green)'}">
+            ${s.noise} <span style="font-size: 18px; color: var(--text-muted); font-weight: 400;">dB(A)</span>
+          </div>
+          <span style="font-size:13px; color:var(--text-muted)">Current Band Limit: <b>${noiseLimit} dB(A)</b></span>
+        </div>
+        <div class="bar-bg">
+          <div class="bar-fill" style="width: ${Math.min(100, (s.noise / noiseLimit) * 100)}%; background: ${s.noise >= noiseLimit ? 'var(--red)' : s.noise >= noiseLimit * 0.8 ? 'var(--amber)' : 'var(--green)'};"></div>
+        </div>
+        <p style="font-size:13px; color:var(--text-muted); margin-top: 4px;">Time Zone: <b>${currentHour >= 7 && currentHour < 19 ? 'Day (07:00-19:00)' : currentHour >= 19 && currentHour < 22 ? 'Evening (19:00-22:00)' : 'Night (22:00-07:00)'}</b></p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3>24-Hour Historical Compliance Envelope</h3>
+        <span style="font-size:12px; color:var(--text-muted)">Rolling 24-hr samples (00:00 to 23:00)</span>
+      </div>
+      <div class="strip-24h">
+        ${s.hist.map((h, idx) => {
+          const lim = getNoiseLimit(idx);
+          const t = getStatusTier(h.d, h.n, lim);
+          const col = t === 'green' ? 'var(--green)' : t === 'amber' ? 'var(--amber)' : 'var(--red)';
+          return `<div title="Hour ${idx}:00 \vert{} Dust:${h.d} µg/m³ | Noise: ${h.n} dB(A)" style="background:${col}"></div>`;
+        }).join('')}
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted);">
+        <span>00:00</span>
+        <span>06:00</span>
+        <span>12:00</span>
+        <span>18:00</span>
+        <span>23:00</span>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>IoT Misting Suppression Automation</h3>
+        <div class="row" style="margin-bottom: 12px;">
+          <button class="b ${s.mode === 'auto' ? '' : 'o'}" onclick="setMistingMode('${s.id}', 'auto')">Auto Rule-Engine</button>
+          <button class="b ${s.mode === 'manual' ? '' : 'o'}" onclick="setMistingMode('${s.id}', 'manual')">Manual Override</button>
+          <button class="b ${s.pump ? 'danger' : 'warn'}" ${s.mode === 'auto' ? 'disabled' : ''} onclick="toggleManualPump('${s.id}')">
+            ${s.pump ? 'Emergency Stop Pump' : 'Start Pump (Manual)'}
+          </button>
+        </div>
+        <p style="font-size: 14px; margin-bottom: 6px;">
+          Pump Relay Status: <b style="color:${s.pump ? 'var(--accent)' : 'inherit'}">${s.pump ? '⚡ RUNNING (Discharging mist)' : 'OFF / STANDBY'}</b><br>
+          Water Reservoir Tank: <b>${Math.round(s.tank)} L</b> / ${s.tankMax} L (${Math.round((s.tank/s.tankMax)*100)}%)<br>
+          Last Cycle Discharged: <b>${s.lastRun ? fmtDateTime(s.lastRun) : 'No discharges today'}</b>
+        </p>
+        <div class="bar-bg">
+          <div class="bar-fill" style="width: ${(s.tank / s.tankMax) * 100}%; background: var(--accent);"></div>
+        </div>
+        <small style="color:var(--text-muted)">Safety Cutoffs: Empty tank shutoff, 10 min max run, 120s cooldown hysteresis.</small>
+      </div>
+
+      <div class="card">
+        <h3>Water Conservation vs Baseline Timer</h3>
+        ${renderWaterChart(s)}
+      </div>
+    </div>
+
+    <div class="card" style="border-left: 4px solid var(--accent);">
+      <h3>Supervisor Rapid Mitigation Logging</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin-bottom: 10px;">Select an onsite action taken to register into the compliance audit log:</p>
+      <div class="row">
+        <button class="b o" onclick="logSupervisorAction('Perimeter misting nozzles triggered')">💦 Perimeter Misting</button>
+        <button class="b o" onclick="logSupervisorAction('Ceased high-noise earthworks temporarily')">🛑 Work Paused</button>
+        <button class="b o" onclick="logSupervisorAction('Repositioned equipment behind acoustic barriers')">🚜 Equipment Moved</button>
+        <button class="b o" onclick="logSupervisorAction('Acoustic curtains and dust netting deployed')">🛡️ Dust & Acoustic Barriers</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Weekly Construction Activity & Tasks</h3>
+      <div class="grid-2" style="margin-bottom: 14px;">
+        <div>
+          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Current Phase Stage</label>
+          <select style="width:100%; margin-top:4px;" onchange="curSite().stage=this.value; renderView();">
+            ${STAGES.map(st => `<option value="${st}" ${st === s.stage ? 'selected' : ''}>${st}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Estimated Completion Date</label>
+          <input type="date" value="${s.end}" style="width:100%; margin-top:4px;" onchange="curSite().end=this.value;">
+        </div>
+      </div>
+
+      <div style="font-size:13px; font-weight:600; color:var(--text-muted); margin-bottom:6px;">Milestone Task Checklist</div>
+      ${s.tasks.map((task, i) => `
+        <div class="row" style="margin-bottom: 6px; justify-content: space-between; background: var(--bg); padding: 6px 10px; border-radius: 4px;">
+          <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" ${task.done ? 'checked' : ''} onchange="curSite().tasks[${i}].done=this.checked; renderView();">
+            <span style="${task.done ? 'text-decoration: line-through; opacity:0.6;' : ''}">${task.t}</span>
+          </label>
+          <button class="b o" style="padding: 2px 8px; font-size:12px;" onclick="curSite().tasks.splice(${i}, 1); renderView();">Remove</button>
+        </div>
+      `).join('')}
+
+      <div class="row" style="margin-top: 10px;">
+        <input id="new-task-input" placeholder="Add compliance or mitigation task..." style="flex-grow:1;">
+        <button class="b" onclick="addTask()">Add Task</button>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Weekly Environmental Notes</label>
+        <textarea rows="2" style="width:100%; margin-top:4px;" placeholder="Document mitigation plans, weather alerts..." oninput="curSite().plan=this.value">${s.plan}</textarea>
+      </div>
+    </div>
+  `;
+}
+
+function renderIncidentsView() {
+  const s = curSite();
+  const incidents = currentUser.role === 'admin' ? dbEvents : dbEvents.filter(e => e.siteId === s.id);
+
+  return `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+      <div>
+        <h2>Environmental Incidents & Actuation Audit</h2>
+        <span style="color:var(--text-muted); font-size:14px;">Compliance trail of automated triggers and manual interventions.</span>
+      </div>
+      <div class="row noprint">
+        <button class="b o" onclick="exportIncidentsCSV()">Export CSV</button>
+        <button class="b" onclick="window.print()">Print Regulatory Report</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Event ID</th>
+            <th>Logged Time</th>
+            <th>Site Reference</th>
+            <th>Breach / Event Type</th>
+            <th>Pre-Reading</th>
+            <th>Mitigation Action Executed</th>
+            <th>Post-Reading</th>
+            <th>Water Used</th>
+            <th>Audit Outcome</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${incidents.map(ev => `
+            <tr>
+              <td><b>${ev.id}</b></td>
+              <td>${fmtDateTime(ev.time)}</td>
+              <td>${ev.siteId.toUpperCase()}</td>
+              <td><span class="chip" style="background:${ev.type.includes('Dust') ? 'var(--amber)' : 'var(--red)'}">${ev.type}</span></td>
+              <td style="font-family:var(--font-mono);">${ev.before}</td>
+              <td>${ev.action}</td>
+              <td style="font-family:var(--font-mono);">${ev.after || '--'}</td>
+              <td>${ev.litres} Litres</td>
+              <td><b>${ev.outcome}</b></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderSettingsView() {
+  return `
+    <h2>Central Environmental Threshold Configuration</h2>
+    <div class="card">
+      <h3>Particulate Matter Limits (PM2.5 / PM10)</h3>
+      <div class="grid-2">
+        <div>
+          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Red Critical Limit (µg/m³)</label>
+          <input type="number" value="${cfg.dust.red}" style="width:100%; margin-top:4px;" onchange="cfg.dust.red=+this.value;">
+        </div>
+        <div>
+          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Amber Advisory Limit (µg/m³)</label>
+          <input type="number" value="${cfg.dust.amber}" style="width:100%; margin-top:4px;" onchange="cfg.dust.amber=+this.value;">
+        </div>
+      </div>
+
+      <h3 style="margin-top: 20px;">Time-Based Acoustic Limits</h3>
+      <div class="grid-3">
+        <div>
+          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Day (07:00 - 19:00) dB(A)</label>
+          <input type="number" value="${cfg.noise.day}" style="width:100%; margin-top:4px;" onchange="cfg.noise.day=+this.value;">
+        </div>
+        <div>
+          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Evening (19:00 - 22:00) dB(A)</label>
+          <input type="number" value="${cfg.noise.eve}" style="width:100%; margin-top:4px;" onchange="cfg.noise.eve=+this.value;">
+        </div>
+        <div>
+          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Night (22:00 - 07:00) dB(A)</label>
+          <input type="number" value="${cfg.noise.night}" style="width:100%; margin-top:4px;" onchange="cfg.noise.night=+this.value;">
+        </div>
+      </div>
+
+      <h3 style="margin-top: 20px;">Misting Automation & Failsafe Parameters</h3>
+      <div class="grid-3">
+        <div>
+          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Mist Discharge Run (Seconds)</label>
+          <input type="number" value="${cfg.mist.onSec}" style="width:100%; margin-top:4px;" onchange="cfg.mist.onSec=+this.value;">
+        </div>
+        <div>
+          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Wait Cooldown Hysteresis (Seconds)</label>
+          <input type="number" value="${cfg.mist.waitSec}" style="width:100%; margin-top:4px;" onchange="cfg.mist.waitSec=+this.value;">
+        </div>
+        <div>
+          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Max Continuous Run (Minutes)</label>
+          <input type="number" value="${cfg.mist.maxMin}" style="width:100%; margin-top:4px;" onchange="cfg.mist.maxMin=+this.value;">
+        </div>
+      </div>
+
+      <div style="margin-top: 24px; display:flex; justify-content:flex-end;">
+        <button class="b" onclick="alert('Configuration synchronized with all active ESP32 edge nodes.')">Commit Global Parameters</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderWaterChart(site) {
+  const labels = ['6d ago', '5d ago', '4d ago', '3d ago', '2d ago', 'Yesterday', 'Today'];
+  const fixedDailyTimerLitres = Math.round((cfg.baselineTimer.workHours * 60 / cfg.baselineTimer.intervalMin) * cfg.baselineTimer.onSec * cfg.flowRateLps);
+  const sensorData = [...site.waterLog, Math.round(site.litresToday)];
+  const baselineData = Array(7).fill(fixedDailyTimerLitres);
+
+  const maxVal = Math.max(...sensorData, ...baselineData, 100);
+  const totalSensor = sensorData.reduce((a, b) => a + b, 0);
+  const totalBaseline = baselineData.reduce((a, b) => a + b, 0);
+  const waterSaved = totalBaseline - totalSensor;
+  const percentSaved = Math.round((waterSaved / totalBaseline) * 100);
+
+  return `
+    <svg viewBox="0 0 360 170" width="100%" style="overflow: visible;">
+      ${sensorData.map((val, i) => {
+        const x = 12 + i * 50;
+        const hBase = (baselineData[i] / maxVal) * 115;
+        const hSens = (val / maxVal) * 115;
+        return `
+          <rect x="${x}" y="${130 - hBase}" width="18" height="${hBase}" fill="var(--border)" rx="2"/>
+          <rect x="${x + 20}" y="${130 - hSens}" width="18" height="${hSens}" fill="var(--accent)" rx="2"/>
+          <text x="${x + 19}" y="148" font-size="11" text-anchor="middle" fill="currentColor">${labels[i]}</text>
+        `;
+      }).join('')}
+    </svg>
+    <div class="row" style="margin-top: 4px; font-size: 13px;">
+      <span style="display:inline-block; width:12px; height:12px; background:var(--accent); border-radius:2px;"></span> Sensor Triggered
+      <span style="display:inline-block; width:12px; height:12px; background:var(--border); border-radius:2px; margin-left: 10px;"></span> Fixed Baseline (${fixedDailyTimerLitres} L/day)
+    </div>
+    <div style="margin-top: 8px; font-size: 14px;">
+      Cumulative 7-Day Conservation: <b style="color:var(--green)">${waterSaved} Litres saved (${percentSaved}% reduction)</b>
+    </div>
+  `;
+}
+
+function setMistingMode(siteId, mode) {
+  const s = SITES.find(x => x.id === siteId);
+  s.mode = mode;
+  if (mode === 'auto' && s.pump) {
+    stopMisting(s, 'Switched to Auto Mode');
+  }
+  renderView();
+}
+
+function toggleManualPump(siteId) {
+  const s = SITES.find(x => x.id === siteId);
+  if (s.pump) {
+    stopMisting(s, 'Manual operator shutoff');
+  } else {
+    startMisting(s, 'Manual operator actuation');
+  }
+  renderView();
+}
+
+function logSupervisorAction(actionText) {
+  const s = curSite();
+  dbEvents.unshift({
+    id: 'EV-' + Math.floor(100 + Math.random() * 900),
+    siteId: s.id,
+    time: Date.now(),
+    type: 'Supervisor Mitigation',
+    before: `Dust: ${s.dust} µg/m³ | Noise: ${s.noise} dB(A)`,
+    action: actionText,
+    after: 'Monitoring recovery window',
+    litres: s.pump ? 15 : 0,
+    outcome: 'Action Logged'
+  });
+  alert(`Action registered to site log: "${actionText}"`);
+  renderView();
+}
+
+function addTask() {
+  const input = $('#new-task-input');
+  if (input && input.value.trim()) {
+    curSite().tasks.push({ t: input.value.trim(), done: false });
+    renderView();
+  }
+}
+
+function exportIncidentsCSV() {
+  const headers = ['Event ID', 'Timestamp', 'Site', 'Type', 'Before Reading', 'Action Taken', 'Post Reading', 'Litres Used', 'Audit Outcome'];
+  const rows = dbEvents.map(e => [
+    e.id,
+    new Date(e.time).toISOString(),
+    e.siteId,
+    e.type,
+    `"${e.before}"`,
+    `"${e.action}"`,
+    `"${e.after || ''}"`,
+    e.litres,
+    `"${e.outcome}"`
+  ]);
+
+  const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement('a');
+  link.setAttribute('href', encodedUri);
+  link.setAttribute('download', `buildwatch_compliance_${Date.now()}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// Initialise Application
+mountLogin();
+setInterval(telemetryEdgeLoop, 2000);
+</script>
+</body>
+</html>
