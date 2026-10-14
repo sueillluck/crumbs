@@ -122,74 +122,50 @@ const cfg = {
   baselineTimer: { onSec: 60, intervalMin: 10, workHours: 10 }
 };
 
-const STAGES = ['Earthworks', 'Piling & Substructure', 'Superstructure', 'Architectural & Facade', 'M&E Infrastructure', 'Testing & Commissioning', 'Handover'];
+const STAGES = ['Earthworks', 'Structure', 'Architectural', 'M&E', 'HVAC', 'Fire fighting', 'AHU', 'Testing & commissioning (MSB/SSB)', 'Handover'];
 
 const SITES = [
   {
     id: 'site-a',
-    name: 'Site A - Residential Precinct (Phase 2)',
-    type: 'Landed Residential & Pocket Parks',
-    lat: 3.12, lng: 101.55,
-    dust: 54, noise: 61, hum: 68,
-    mode: 'auto', pump: false, tank: 1800, tankMax: 2500,
+    name: 'Site A, landed phase 2',
+    type: 'Landed construction',
+    lat: 3.221, lng: 101.49,
+    dust: 60, noise: 62, hum: 68,
+    mode: 'auto', pump: false, tank: 850, tankMax: 1000,
     lastRun: null, mistEnd: 0, cooldownEnd: 0,
-    stage: 'Superstructure', end: '2026-11-20', 
-    plan: 'Acoustic boundary monitoring along completed Phase 1 residential buffer line.',
-    tasks: [
-      { t: 'Phase 1 boundary acoustic curtain inspection', done: true },
-      { t: 'Residential perimeter dust mist nozzles check', done: true },
-      { t: 'Concrete delivery route speed limiter check', done: false }
-    ],
-    hist: Array.from({ length: 24 }, (_, i) => ({ 
-      d: Math.round(35 + Math.random() * 45 + (i >= 8 && i <= 17 ? 30 : 0)), 
-      n: Math.round(48 + Math.random() * 16 + (i >= 8 && i <= 17 ? 10 : 0)) 
-    })),
-    waterLog: [340, 410, 310, 450, 390, 420],
-    litresToday: 95
+    stage: 'Earthworks', end: '2026-12-18', plan: 'Haul road watering, drainage trenching, and boundary misting.',
+    tasks: [{ t: 'Haul road watering', done: false }, { t: 'Drainage trench', done: false }, { t: 'Slope turfing', done: false }],
+    hist: Array.from({ length: 24 }, (_, i) => ({ d: Math.round(35 + Math.random() * 50 + (i >= 8 && i <= 17 ? 35 : 0)), n: Math.round(48 + Math.random() * 18 + (i >= 8 && i <= 17 ? 12 : 0)) })),
+    waterLog: [180, 210, 160, 240, 190, 220],
+    litresToday: 42
   },
   {
     id: 'site-b',
-    name: 'Site B - Central Commercial Square',
-    type: 'Retail Hub & High-Density Mixed Blocks',
-    lat: 3.09, lng: 101.52,
-    dust: 42, noise: 74, hum: 75,
-    mode: 'auto', pump: false, tank: 2200, tankMax: 3000,
+    name: 'Site B, terrace renovation',
+    type: 'Renovation',
+    lat: 3.2105, lng: 101.504,
+    dust: 35, noise: 58, hum: 75,
+    mode: 'auto', pump: false, tank: 420, tankMax: 1000,
     lastRun: null, mistEnd: 0, cooldownEnd: 0,
-    stage: 'Piling & Substructure', end: '2027-04-15', 
-    plan: 'Deep basement diaphragm walling and stormwater interceptor silt control.',
-    tasks: [
-      { t: 'Deep basement diaphragm wall silt traps cleared', done: false },
-      { t: 'Central haulage exit tyre-wash trough inspection', done: true },
-      { t: 'Tower crane noise baffle inspection', done: false }
-    ],
-    hist: Array.from({ length: 24 }, (_, i) => ({ 
-      d: Math.round(25 + Math.random() * 40), 
-      n: Math.round(52 + Math.random() * 20 + (i >= 7 && i <= 19 ? 15 : 0)) 
-    })),
-    waterLog: [280, 320, 260, 390, 310, 340],
-    litresToday: 60
+    stage: 'M&E', end: '2027-04-15', plan: 'Conduit install and material deliveries.',
+    tasks: [{ t: 'Conduit install', done: false }, { t: 'DB board delivery', done: false }],
+    hist: Array.from({ length: 24 }, (_, i) => ({ d: Math.round(25 + Math.random() * 40), n: Math.round(52 + Math.random() * 20 + (i >= 7 && i <= 19 ? 15 : 0)) })),
+    waterLog: [110, 140, 95, 120, 130, 105],
+    litresToday: 28
   },
   {
     id: 'site-c',
-    name: 'Site C - Infrastructure & Spine Road',
-    type: 'Major Arterial Road & Detention Pond',
-    lat: 3.06, lng: 101.58,
-    dust: 92, noise: 67, hum: 82,
-    mode: 'manual', pump: false, tank: 3800, tankMax: 5000,
+    name: 'Site C, commercial block',
+    type: 'Commercial',
+    lat: 3.198, lng: 101.485,
+    dust: 45, noise: 66, hum: 82,
+    mode: 'manual', pump: false, tank: 920, tankMax: 1000,
     lastRun: null, mistEnd: 0, cooldownEnd: 0,
-    stage: 'Earthworks', end: '2026-12-05', 
-    plan: 'Mass earth cut-and-fill and retention lake culvert grading.',
-    tasks: [
-      { t: 'Perimeter silt fence & sediment basin inspection', done: true },
-      { t: 'Main unpaved haul road water-bowser run', done: false },
-      { t: 'Subgrade slope erosion fabric check', done: false }
-    ],
-    hist: Array.from({ length: 24 }, (_, i) => ({ 
-      d: Math.round(50 + Math.random() * 55 + (i >= 9 && i <= 16 ? 40 : 0)), 
-      n: Math.round(52 + Math.random() * 15) 
-    })),
-    waterLog: [520, 610, 480, 670, 560, 590],
-    litresToday: 140
+    stage: 'Testing & commissioning (MSB/SSB)', end: '2026-12-05', plan: 'Substation energising and acoustic monitoring during test runs.',
+    tasks: [{ t: 'HVAC test run', done: false }, { t: 'Fire alarm test', done: false }, { t: 'MSB energising', done: false }],
+    hist: Array.from({ length: 24 }, (_, i) => ({ d: Math.round(45 + Math.random() * 60 + (i >= 9 && i <= 16 ? 45 : 0)), n: Math.round(50 + Math.random() * 15) })),
+    waterLog: [280, 310, 270, 340, 290, 330],
+    litresToday: 75
   }
 ];
 
@@ -309,7 +285,7 @@ function mountLogin() {
             </select>
           </div>
           <div id="site-picker-row">
-            <label style="font-size: 13px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 4px;">Assigned Project</label>
+            <label style="font-size: 13px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 4px;">Assigned Site</label>
             <select id="login-site" style="width: 100%;">
               ${SITES.map(s => `<option value="${s.id}">${s.name} (${s.type})</option>`).join('')}
             </select>
@@ -367,7 +343,7 @@ function renderView(isPeriodicTick = false) {
   if (currentUser.role === 'admin') {
     headerHtml = `
       <div class="card" style="padding: 10px 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
-        <span style="font-weight: 500; font-size: 14px;">Selected Project:</span>
+        <span style="font-weight: 500; font-size: 14px;">Selected Site:</span>
         <select style="min-width: 320px;" onchange="activeSiteId = this.value; renderView();">
           ${SITES.map(s => `<option value="${s.id}" ${s.id === activeSiteId ? 'selected' : ''}>${s.name}</option>`).join('')}
         </select>
@@ -428,11 +404,11 @@ function renderOverviewView() {
     </div>
     <div id="map-wrapper"><div id="map"></div></div>
     <div class="card">
-      <h3>Active Project Sites</h3>
+      <h3>Active Construction Sites</h3>
       <table>
         <thead>
           <tr>
-            <th>Project Site</th>
+            <th>Site Name</th>
             <th>Work Stage</th>
             <th>PM2.5 / Dust</th>
             <th>Noise Level</th>
@@ -477,7 +453,8 @@ function initMap() {
       mapMarkers = {};
     }
 
-    mapInstance = L.map('map').setView([3.05, 101.55], 10);
+    // Set center matching the site coordinates
+    mapInstance = L.map('map').setView([3.21, 101.495], 13);
     
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
