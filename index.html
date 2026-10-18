@@ -1,880 +1,1277 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>BuildWatch Site Operations Console</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #ecefe6;
-      --card-bg: #f8faf6;
-      --text-main: #141c1e;
-      --text-muted: #536467;
-      --border: #ccd6d3;
-      --accent: #11626d;
-      --accent-hover: #0c4a52;
-      --green: #238551;
-      --amber: #cb7e00;
-      --red: #c53429;
-      --sidebar-bg: #141c1e;
-      --sidebar-text: #e2ece9;
-      --sidebar-active: #1a7885;
-      --font-mono: 'JetBrains Mono', monospace;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #0f1618;
-        --card-bg: #162023;
-        --text-main: #e6eff0;
-        --text-muted: #8b9ea1;
-        --border: #28373b;
-        --accent: #4eb6c4;
-        --accent-hover: #67c5d2;
-        --green: #34a86b;
-        --amber: #e59316;
-        --red: #e04b40;
-        --sidebar-bg: #0a0f11;
-        --sidebar-text: #d8e6e8;
-        --sidebar-active: #205057;
-      }
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text-main); font: 400 15px/1.5 'Barlow', system-ui, sans-serif; }
-    h1, h2, h3 { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-    h1 { font-size: 24px; }
-    h2 { font-size: 24px; margin-bottom: 12px; }
-    h3 { font-size: 18px; margin-bottom: 8px; color: var(--accent); }
-    
-    .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
-    .sidebar { background: var(--sidebar-bg); color: var(--sidebar-text); padding: 20px 14px; display: flex; flex-direction: column; }
-    .sidebar h1 { color: #fff; display: flex; align-items: center; gap: 8px; }
-    .sidebar .role-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: rgba(255,255,255,0.1); margin-top: 4px; text-transform: uppercase; }
-    .nav-group { margin-top: 24px; display: flex; flex-direction: column; gap: 4px; flex-grow: 1; }
-    .sidebar button { width: 100%; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 10px 12px; border-radius: 6px; cursor: pointer; transition: background 0.15s ease; }
-    .sidebar button:hover { background: rgba(255,255,255,0.06); }
-    .sidebar button.on { background: var(--sidebar-active); color: #fff; font-weight: 500; }
-    
-    .main { padding: 24px; max-width: 1250px; width: 100%; margin: 0 auto; }
-    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
-    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
-    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    
-    .b { background: var(--accent); color: #fff; border: 0; border-radius: 4px; padding: 8px 16px; cursor: pointer; font-weight: 500; transition: background 0.15s ease; }
-    .b:hover { background: var(--accent-hover); }
-    .b.o { background: transparent; color: var(--text-main); border: 1px solid var(--border); }
-    .b.o:hover { background: rgba(0,0,0,0.03); }
-    .b.danger { background: var(--red); color: #fff; }
-    .b.warn { background: var(--amber); color: #fff; }
-    .b:disabled { opacity: 0.45; cursor: not-allowed; }
-    
-    input, select, textarea { background: var(--bg); border: 1px solid var(--border); color: var(--text-main); border-radius: 4px; padding: 7px 10px; font: inherit; }
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
-    th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 12px; }
-    
-    .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 12px; color: #fff; font-size: 12px; font-weight: 600; text-transform: uppercase; }
-    .banner { padding: 12px 16px; border-radius: 6px; font-weight: 500; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
-    .banner.amber { background: #fff5e5; color: #8a5300; border: 1px solid #fedb99; }
-    .banner.red { background: #fdeeee; color: #9c1f17; border: 1px solid #f9b8b3; }
-    .big-num { font-family: 'Barlow Condensed', sans-serif; font-size: 46px; font-weight: 700; line-height: 1; }
-    .bar-bg { height: 10px; background: var(--bg); border-radius: 5px; overflow: hidden; margin: 6px 0; border: 1px solid var(--border); }
-    .bar-fill { height: 100%; transition: width 0.3s ease; }
-    .strip-24h { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; height: 26px; margin: 8px 0; }
-    .strip-24h div { border-radius: 2px; }
-    
-    #map-wrapper { margin-bottom: 20px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
-    #map { height: 380px; width: 100%; }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BuildWatch Console</title>
 
-    .leaflet-div-icon.custom-map-pin {
-      background: transparent !important;
-      border: none !important;
-    }
-    
-    @media (max-width: 840px) {
-      .app { grid-template-columns: 1fr; }
-      .sidebar { flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; }
-      .nav-group { flex-direction: row; flex-wrap: wrap; width: 100%; margin-top: 12px; }
-      .nav-group button { width: auto; }
-    }
-    @media print {
-      .sidebar, .noprint, #map-wrapper, .b { display: none !important; }
-      .app { display: block; }
-      .card { border: 1px solid #ccc; box-shadow: none; break-inside: avoid; }
-      body { background: #fff; color: #000; }
-    }
-  </style>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- React 18 & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel Standalone for inline JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
-<body>
-<div id="root"></div>
+<body class="bg-orange-50 text-slate-900 antialiased">
+  <div id="root"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script>
-const cfg = {
-  dust: { amber: 80, red: 100 },
-  noise: { day: 75, eve: 65, night: 55 },
-  mist: { onSec: 60, waitSec: 120, maxMin: 10 },
-  flowRateLps: 0.25,
-  baselineTimer: { onSec: 60, intervalMin: 10, workHours: 10 }
-};
+  <script type="text/babel">
+    const { Fragment, useState, useEffect, useMemo, useRef, createContext, useContext } = React;
 
-const STAGES = ['Earthworks', 'Structure', 'Architectural', 'M&E', 'HVAC', 'Fire fighting', 'AHU', 'Testing & commissioning (MSB/SSB)', 'Handover'];
+    const LOGO_URL = "https://lh3.googleusercontent.com/d/1zg2QdCODuEjCtemF8Pg4HNyPg8OXpoHS";
 
-const SITES = [
-  {
-    id: 'site-a',
-    name: 'Site A, landed phase 2',
-    type: 'Landed construction',
-    lat: 3.221, lng: 101.49,
-    dust: 60, noise: 62, hum: 68,
-    mode: 'auto', pump: false, tank: 850, tankMax: 1000,
-    lastRun: null, mistEnd: 0, cooldownEnd: 0,
-    stage: 'Earthworks', end: '2026-12-18', plan: 'Haul road watering, drainage trenching, and boundary misting.',
-    tasks: [{ t: 'Haul road watering', done: false }, { t: 'Drainage trench', done: false }, { t: 'Slope turfing', done: false }],
-    hist: Array.from({ length: 24 }, (_, i) => ({ d: Math.round(35 + Math.random() * 50 + (i >= 8 && i <= 17 ? 35 : 0)), n: Math.round(48 + Math.random() * 18 + (i >= 8 && i <= 17 ? 12 : 0)) })),
-    waterLog: [180, 210, 160, 240, 190, 220],
-    litresToday: 42
-  },
-  {
-    id: 'site-b',
-    name: 'Site B, terrace renovation',
-    type: 'Renovation',
-    lat: 3.2105, lng: 101.504,
-    dust: 35, noise: 58, hum: 75,
-    mode: 'auto', pump: false, tank: 420, tankMax: 1000,
-    lastRun: null, mistEnd: 0, cooldownEnd: 0,
-    stage: 'M&E', end: '2027-04-15', plan: 'Conduit install and material deliveries.',
-    tasks: [{ t: 'Conduit install', done: false }, { t: 'DB board delivery', done: false }],
-    hist: Array.from({ length: 24 }, (_, i) => ({ d: Math.round(25 + Math.random() * 40), n: Math.round(52 + Math.random() * 20 + (i >= 7 && i <= 19 ? 15 : 0)) })),
-    waterLog: [110, 140, 95, 120, 130, 105],
-    litresToday: 28
-  },
-  {
-    id: 'site-c',
-    name: 'Site C, commercial block',
-    type: 'Commercial',
-    lat: 3.198, lng: 101.485,
-    dust: 45, noise: 66, hum: 82,
-    mode: 'manual', pump: false, tank: 920, tankMax: 1000,
-    lastRun: null, mistEnd: 0, cooldownEnd: 0,
-    stage: 'Testing & commissioning (MSB/SSB)', end: '2026-12-05', plan: 'Substation energising and acoustic monitoring during test runs.',
-    tasks: [{ t: 'HVAC test run', done: false }, { t: 'Fire alarm test', done: false }, { t: 'MSB energising', done: false }],
-    hist: Array.from({ length: 24 }, (_, i) => ({ d: Math.round(45 + Math.random() * 60 + (i >= 9 && i <= 16 ? 45 : 0)), n: Math.round(50 + Math.random() * 15) })),
-    waterLog: [280, 310, 270, 340, 290, 330],
-    litresToday: 75
-  }
-];
-
-let dbEvents = [
-  { id: 'EV-801', siteId: 'site-c', time: Date.now() - 3600000, type: 'Dust Spike', before: '112 µg/m³', action: 'Auto Misting (60s cycle)', after: '68 µg/m³', litres: 15, outcome: 'Controlled' },
-  { id: 'EV-800', siteId: 'site-b', time: Date.now() - 7200000, type: 'Noise Breach', before: '78 dB(A)', action: 'Relocated generator behind barrier', after: '63 dB(A)', litres: 0, outcome: 'Compliance Restored' }
-];
-
-let currentUser = null;
-let activeTab = 'overview';
-let activeSiteId = 'site-a';
-let mapInstance = null;
-let mapMarkers = {};
-
-const $ = s => document.querySelector(s);
-const curSite = () => SITES.find(s => s.id === activeSiteId) || SITES[0];
-const getNoiseLimit = (hour = new Date().getHours()) => hour >= 7 && hour < 19 ? cfg.noise.day : hour >= 19 && hour < 22 ? cfg.noise.eve : cfg.noise.night;
-const getStatusTier = (dust, noise, nLimit) => {
-  const maxRatio = Math.max(dust / cfg.dust.red, noise / nLimit);
-  return maxRatio >= 1.0 ? 'red' : maxRatio >= 0.8 ? 'amber' : 'green';
-};
-const fmtDateTime = ts => new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-
-function telemetryEdgeLoop() {
-  const currentHour = new Date().getHours();
-  const noiseLimit = getNoiseLimit(currentHour);
-
-  SITES.forEach(s => {
-    s.dust = Math.max(12, Math.round(s.dust + (Math.random() * 10 - 5) + (s.id === 'site-c' && Math.random() < 0.1 ? 25 : 0)));
-    s.noise = Math.max(42, Math.min(94, Math.round(s.noise + (Math.random() * 6 - 3))));
-    s.hum = Math.max(45, Math.min(98, Math.round(s.hum + (Math.random() * 2 - 1))));
-
-    if (s.pump) {
-      const waterUsed = cfg.flowRateLps * 2;
-      s.tank = Math.max(0, s.tank - waterUsed);
-      s.litresToday += waterUsed;
-      s.dust = Math.max(15, Math.round(s.dust * 0.82));
-
-      if (Date.now() >= s.mistEnd || s.tank <= 0) {
-        stopMisting(s, s.tank <= 0 ? 'Water tank empty emergency shutoff' : 'Completed cycle');
-      }
-    } else {
-      if (s.mode === 'auto' && s.dust >= cfg.dust.red && Date.now() >= s.cooldownEnd && s.tank > 0) {
-        startMisting(s, 'Automated threshold trigger');
-      }
-    }
-  });
-
-  if (currentUser && !document.activeElement.matches('input, textarea, select')) {
-    renderView(true);
-  }
-}
-
-function startMisting(site, triggerReason) {
-  if (site.tank <= 0 || site.pump) return;
-  site.pump = true;
-  site.mistEnd = Date.now() + (cfg.mist.onSec * 1000);
-  site.currentIncident = {
-    id: 'EV-' + Math.floor(100 + Math.random() * 900),
-    siteId: site.id,
-    time: Date.now(),
-    type: 'Dust Spike',
-    before: `${site.dust} µg/m³`,
-    action: triggerReason,
-    litres: 0
-  };
-}
-
-function stopMisting(site, outcomeReason) {
-  site.pump = false;
-  site.lastRun = Date.now();
-  site.cooldownEnd = Date.now() + (cfg.mist.waitSec * 1000);
-  if (site.currentIncident) {
-    site.currentIncident.after = `${site.dust} µg/m³`;
-    site.currentIncident.litres = Math.round(cfg.mist.onSec * cfg.flowRateLps);
-    site.currentIncident.outcome = site.dust < cfg.dust.amber ? 'Controlled' : 'Elevated - Cycle Queued';
-    dbEvents.unshift(site.currentIncident);
-    site.currentIncident = null;
-  }
-}
-
-function login(role, siteId = 'site-a') {
-  currentUser = { role, siteId };
-  activeSiteId = siteId;
-  activeTab = 'overview';
-  mountShell();
-  renderView();
-}
-
-function logout() {
-  currentUser = null;
-  if (mapInstance) { 
-    try { mapInstance.remove(); } catch(e){}
-    mapInstance = null; 
-    mapMarkers = {};
-  }
-  mountLogin();
-}
-
-function mountLogin() {
-  $('#root').innerHTML = `
-    <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;">
-      <div class="card" style="max-width: 440px; width: 100%; padding: 28px;">
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom: 8px;">
-          <div style="width:14px; height:14px; border-radius:3px; background:var(--accent);"></div>
-          <h1>BuildWatch Operations</h1>
-        </div>
-        <p style="color:var(--text-muted); font-size: 14px; margin-bottom: 20px;">
-          Environmental Telemetry, IoT Mist Actuation, and Regulatory Compliance Console.
-        </p>
-        <div style="display: flex; flex-direction: column; gap: 14px;">
-          <div>
-            <label style="font-size: 13px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 4px;">Role Profile</label>
-            <select id="login-role" style="width: 100%;" onchange="$('#site-picker-row').style.display = this.value === 'manager' ? 'block' : 'none'">
-              <option value="manager">Site Manager</option>
-              <option value="admin">SDP Admin</option>
-            </select>
-          </div>
-          <div id="site-picker-row">
-            <label style="font-size: 13px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 4px;">Assigned Site</label>
-            <select id="login-site" style="width: 100%;">
-              ${SITES.map(s => `<option value="${s.id}">${s.name} (${s.type})</option>`).join('')}
-            </select>
-          </div>
-          <button class="b" style="padding: 11px; margin-top: 6px;" onclick="login($('#login-role').value, $('#login-site').value)">
-            Sign in to Console
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function mountShell() {
-  const isAdmin = currentUser.role === 'admin';
-  $('#root').innerHTML = `
-    <div class="app">
-      <nav class="sidebar">
-        <div>
-          <h1>BuildWatch</h1>
-          <span class="role-badge">
-            ${isAdmin ? 'Central Admin' : 'Manager: ' + curSite().name}
-          </span>
-        </div>
-        <div class="nav-group">
-          <button data-tab="overview" onclick="switchTab('overview')">Map & Site Overview</button>
-          <button data-tab="detail" onclick="switchTab('detail')">Site Live Console</button>
-          <button data-tab="incidents" onclick="switchTab('incidents')">Incident Audit Log</button>
-          ${isAdmin ? `<button data-tab="settings" onclick="switchTab('settings')">Threshold Config</button>` : ''}
-        </div>
-        <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 14px;">
-          <button onclick="logout()" style="opacity: 0.7;">Sign out</button>
-        </div>
-      </nav>
-      <main class="main" id="workspace-container"></main>
-    </div>
-  `;
-}
-
-function switchTab(tabId) {
-  activeTab = tabId;
-  renderView();
-}
-
-function renderView(isPeriodicTick = false) {
-  const container = $('#workspace-container');
-  if (!container) return;
-
-  if (isPeriodicTick && activeTab === 'overview' && mapInstance) {
-    updateOverviewInPlace();
-    return;
-  }
-
-  let headerHtml = '';
-  if (currentUser.role === 'admin') {
-    headerHtml = `
-      <div class="card" style="padding: 10px 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
-        <span style="font-weight: 500; font-size: 14px;">Selected Site:</span>
-        <select style="min-width: 320px;" onchange="activeSiteId = this.value; renderView();">
-          ${SITES.map(s => `<option value="${s.id}" ${s.id === activeSiteId ? 'selected' : ''}>${s.name}</option>`).join('')}
-        </select>
-      </div>
-    `;
-  }
-
-  if (activeTab === 'overview') {
-    container.innerHTML = headerHtml + renderOverviewView();
-    initMap();
-  } else {
-    if (mapInstance) {
-      try { mapInstance.remove(); } catch(e){}
-      mapInstance = null;
-      mapMarkers = {};
-    }
-    if (activeTab === 'detail') {
-      container.innerHTML = headerHtml + renderSiteDetailView();
-    } else if (activeTab === 'incidents') {
-      container.innerHTML = headerHtml + renderIncidentsView();
-    } else if (activeTab === 'settings') {
-      container.innerHTML = headerHtml + renderSettingsView();
-    }
-  }
-
-  document.querySelectorAll('.sidebar button[data-tab]').forEach(btn => {
-    btn.classList.toggle('on', btn.dataset.tab === activeTab);
-  });
-}
-
-function updateOverviewInPlace() {
-  const currentLimit = getNoiseLimit();
-  SITES.forEach(s => {
-    const tier = getStatusTier(s.dust, s.noise, currentLimit);
-    const markerColor = tier === 'green' ? '#238551' : tier === 'amber' ? '#cb7e00' : '#c53429';
-    if (mapMarkers[s.id]) {
-      const icon = L.divIcon({
-        className: 'custom-map-pin',
-        iconSize: [20, 20],
-        iconAnchor: [10, 10],
-        popupAnchor: [0, -10],
-        html: `<div style="width:20px; height:20px; border-radius:50%; background:${markerColor}; border:3px solid #fff; box-shadow:0 0 6px rgba(0,0,0,0.4); cursor:pointer;"></div>`
-      });
-      mapMarkers[s.id].setIcon(icon);
-    }
-  });
-}
-
-function renderOverviewView() {
-  const currentLimit = getNoiseLimit();
-  return `
-    <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
-      <h2>Project Monitoring Map & Site Matrix</h2>
-      <div style="font-size: 12px; color: var(--text-muted); background: rgba(0,0,0,0.04); border: 1px dashed var(--border); border-radius: 4px; padding: 4px 10px; display: inline-flex; align-items: center; gap: 6px;">
-        <span>ℹ️</span>
-        <span><b>Notice:</b> Readings are indicative edge sensor telemetry.</span>
-      </div>
-    </div>
-    <div id="map-wrapper"><div id="map"></div></div>
-    <div class="card">
-      <h3>Active Construction Sites</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Site Name</th>
-            <th>Work Stage</th>
-            <th>PM2.5 / Dust</th>
-            <th>Noise Level</th>
-            <th>Overall Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${SITES.map(s => {
-            const tier = getStatusTier(s.dust, s.noise, currentLimit);
-            const statusLabel = tier === 'green' ? 'Normal' : tier === 'amber' ? 'Warning (80%)' : 'Exceeded';
-            const statusColor = tier === 'green' ? 'var(--green)' : tier === 'amber' ? 'var(--amber)' : 'var(--red)';
-            return `
-              <tr>
-                <td><b>${s.name}</b><br><small style="color:var(--text-muted)">${s.type}</small></td>
-                <td>${s.stage}</td>
-                <td><span style="font-family:var(--font-mono); font-weight:600;">${s.dust}</span> µg/m³</td>
-                <td><span style="font-family:var(--font-mono); font-weight:600;">${s.noise}</span> dB(A)</td>
-                <td><span class="chip" style="background:${statusColor}">${statusLabel}</span></td>
-                <td>
-                  <button class="b o" style="padding: 4px 10px; font-size: 13px;" onclick="activeSiteId='${s.id}'; switchTab('detail');">
-                    Open Console
-                  </button>
-                </td>
-              </tr>
-            `;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function initMap() {
-  setTimeout(() => {
-    const mapEl = $('#map');
-    if (!mapEl) return;
-
-    if (mapInstance) {
-      try { mapInstance.remove(); } catch(e){}
-      mapInstance = null;
-      mapMarkers = {};
+    /* ------------------------------------------------------------------ *
+     *  DYNAMIC LUCIDE ICON HELPER
+     * ------------------------------------------------------------------ */
+    function Icon({ name, size = 16, className = "" }) {
+      const containerRef = useRef(null);
+      useEffect(() => {
+        if (!window.lucide || !containerRef.current) return;
+        const iconDef = window.lucide.icons[name];
+        if (iconDef) {
+          containerRef.current.innerHTML = "";
+          const svgNode = window.lucide.createElement(iconDef);
+          svgNode.setAttribute("width", size);
+          svgNode.setAttribute("height", size);
+          containerRef.current.appendChild(svgNode);
+        }
+      }, [name, size, className]);
+      return <span ref={containerRef} className={`inline-flex items-center justify-center shrink-0 ${className}`} />;
     }
 
-    // Set center matching the site coordinates
-    mapInstance = L.map('map').setView([3.21, 101.495], 13);
+    /* ------------------------------------------------------------------ *
+     *  ENVIRONMENT CONFIG & HELPER MATH
+     * ------------------------------------------------------------------ */
+    // Updated Center to perfectly match the Flutter App's Elmina Green anchor
+    const CENTER = [3.2065, 101.4945];
+    const ACTIONS = [
+      "Contractor instructed to pause heavy machinery",
+      "Acoustic curtain deployed",
+      "Working hours adjusted",
+      "Equipment relocated behind barrier",
+    ];
     
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(mapInstance);
+    const TASK_OPTS = [
+      "Earthworks & Foundation", "Wall Hacking & Demolition", "Conduit Installation (Concealed)", 
+      "HVAC Ducting & Piping", "DB / MSB / SSB Installation", "Cable Pulling & Wiring", 
+      "Plumbing & Sanitary", "Tile Laying & Flooring", "Plastering & Painting", 
+      "Testing & Commissioning", "Site Cleanup", "Others"
+    ];
 
-    const currentLimit = getNoiseLimit();
-    const bounds = [];
+    const DEFAULT_CFG = {
+      mistMargin: 10,
+      levels: {
+        light: { noise: 65, dust: 25 },
+        moderate: { noise: 75, dust: 45 },
+        heavy: { noise: 85, dust: 70 },
+      },
+    };
 
-    SITES.forEach((s, idx) => {
-      bounds.push([s.lat, s.lng]);
-      const tier = getStatusTier(s.dust, s.noise, currentLimit);
-      const markerColor = tier === 'green' ? '#238551' : tier === 'amber' ? '#cb7e00' : '#c53429';
-      
-      const icon = L.divIcon({
-        className: 'custom-map-pin',
-        iconSize: [20, 20],
-        iconAnchor: [10, 10],
-        popupAnchor: [0, -10],
-        html: `<div style="width:20px; height:20px; border-radius:50%; background:${markerColor}; border:3px solid #fff; box-shadow:0 0 6px rgba(0,0,0,0.4); cursor:pointer;"></div>`
-      });
+    const DAY0 = new Date(); DAY0.setHours(0, 0, 0, 0);
+    const at = (h, m = 0) => DAY0.getTime() + (h * 60 + m) * 60000;
+    const tm = (t) => { const [h, m] = t.split(":").map(Number); return at(h, m); };
+    const toTimeStr = (ms) => { const d = new Date(ms); return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`; };
+    
+    const CLOCK_OFFSET = (() => { const h = new Date().getHours(); return h >= 8 && h < 18 ? 0 : at(10, 30) - Date.now(); })();
+    const clock = () => Date.now() + CLOCK_OFFSET;
 
-      const popupContent = `
-        <div style="font-family:'Barlow',sans-serif; font-size:13px; line-height:1.4;">
-          <b style="font-size:15px; color:#11626d;">${s.name}</b><br>
-          <span style="color:#536467;">Type: ${s.type}</span><hr style="margin:6px 0; border:0; border-top:1px solid #ccd6d3;">
-          Dust: <b>${s.dust} µg/m³</b><br>
-          Noise: <b>${s.noise} dB(A)</b><br>
-          Misting: <b>${s.pump ? '⚡ Active' : 'Standby'}</b><br>
-          <button style="margin-top:6px; background:#11626d; color:#fff; border:0; border-radius:3px; padding:4px 8px; cursor:pointer;" 
-                  onclick="activeSiteId='${s.id}'; switchTab('detail');">
-            Open Console
-          </button>
-        </div>
-      `;
+    const STATUS = {
+      green: { label: "Normal", hex: "#16a34a", pill: "bg-green-100 text-green-800", iconName: "CheckCircle2", iconCls: "text-green-600" },
+      amber: { label: "Warning · Misting", hex: "#eab308", pill: "bg-yellow-100 text-yellow-800", iconName: "Droplets", iconCls: "text-yellow-500" },
+      red: { label: "Critical · Breach", hex: "#dc2626", pill: "bg-red-100 text-red-800", iconName: "AlertTriangle", iconCls: "text-red-600" },
+    };
+    const RANK = { green: 0, amber: 1, red: 2 };
+    const LEVELS = ["light", "moderate", "heavy"];
+    const LVL = {
+      light: { label: "Light", cls: "border-orange-200 bg-orange-50 text-orange-700" },
+      moderate: { label: "Moderate", cls: "border-orange-300 bg-orange-200 text-orange-900" },
+      heavy: { label: "Heavy", cls: "border-orange-600 bg-orange-600 text-white" },
+    };
 
-      mapMarkers[s.id] = L.marker([s.lat, s.lng], { icon })
-        .addTo(mapInstance)
-        .bindPopup(popupContent);
+    const maxLvl = (arr) => arr.reduce((m, l) => (LEVELS.indexOf(l) > LEVELS.indexOf(m) ? l : m), "light");
+    const workState = (w, now = clock()) => (w.end <= now ? "done" : w.start <= now ? "active" : "upcoming");
+    const fmt = (ms) => new Date(ms).toLocaleTimeString("en-MY", { hour: "2-digit", minute: "2-digit", hour12: true });
 
-      if (idx === 0) {
-        mapMarkers[s.id].openPopup();
-      }
+    const check = (site, a, c, now = clock()) => {
+      const works = (site.config?.schDetailed || []).filter((w) => w.area === a.id && workState(w, now) === "active");
+      const noiseLvl = maxLvl(works.map((w) => w.noise));
+      const dustLvl = maxLvl(works.map((w) => w.dust));
+      const noiseLimit = c.levels[noiseLvl].noise, dustLimit = c.levels[dustLvl].dust;
+      const noiseBreach = a.db > noiseLimit, dustBreach = a.pm25 > dustLimit;
+      const dustTarget = Math.round(dustLimit * (1 - c.mistMargin / 100));
+      const mist = !!a.mist;
+      return { works, noiseLvl, dustLvl, noiseLimit, dustLimit, dustTarget, noiseBreach, dustBreach, mist, status: noiseBreach ? "red" : dustBreach || mist ? "amber" : "green" };
+    };
+
+    const siteStatus = (s, c) => (s.areas || []).map((a) => check(s, a, c).status).reduce((w, x) => (RANK[x] > RANK[w] ? x : w), "green");
+    const peakOf = (s) => ({
+      n: (s.areas || []).reduce((m, a) => (a.db > m.db ? a : m), { db: 0, id: 1 }),
+      d: (s.areas || []).reduce((m, a) => (a.pm25 > m.pm25 ? a : m), { pm25: 0, pm10: 0, id: 1 }),
     });
 
-    if (bounds.length > 0) {
-      mapInstance.fitBounds(bounds, { padding: [40, 40] });
+    const CfgCtx = createContext(DEFAULT_CFG);
+    const useCfg = () => useContext(CfgCtx);
+
+    const card = "rounded-xl border border-orange-100 bg-white shadow-sm";
+    const btn = "rounded-lg bg-orange-500 px-4 py-2.5 font-semibold text-white hover:bg-orange-600 transition";
+    const field = "w-full rounded-lg border border-orange-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-orange-500";
+
+    function StatusPill({ status }) {
+      const s = STATUS[status];
+      return (
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${s.pill}`}>
+          <Icon name={s.iconName} size={12} /> {s.label}
+        </span>
+      );
     }
 
-    mapInstance.invalidateSize();
-  }, 50);
-}
+    function Meter({ iconName, label, value, unit, limit, sub, caption }) {
+      const ratio = value / limit;
+      const color = ratio >= 1 ? "bg-red-500" : ratio >= 0.8 ? "bg-yellow-500" : "bg-green-500";
+      return (
+        <div className={`${card} p-4 sm:p-5`}>
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-orange-600">
+            <Icon name={iconName} size={14} /> {label}
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-4xl font-bold tabular-nums sm:text-5xl">{value}</span>
+            <span className="text-slate-500">{unit}</span>
+          </div>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-orange-50">
+            <div className={`h-full transition-all duration-500 ${color}`} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
+          </div>
+          <div className="mt-2 flex justify-between text-xs text-slate-500">
+            <span>{sub}</span><span>Limit {limit} {unit}</span>
+          </div>
+          <div className="mt-3 inline-block rounded-md bg-orange-500 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+            Highest Active Floor Reading
+          </div>
+          <div className="mt-1 text-xs text-slate-500">{caption}</div>
+        </div>
+      );
+    }
 
-function renderSiteDetailView() {
-  const s = curSite();
-  const currentHour = new Date().getHours();
-  const noiseLimit = getNoiseLimit(currentHour);
-  const tier = getStatusTier(s.dust, s.noise, noiseLimit);
+    /* ------------------------------------------------------------------ *
+     *  LOGIN PAGE
+     * ------------------------------------------------------------------ */
+    function LoginPage({ sites, onLogin }) {
+      const [role, setRole] = useState("admin");
+      const [siteId, setSiteId] = useState(sites.length ? sites[0].id : "site-a");
+      const [email, setEmail] = useState("");
+      const [pw, setPw] = useState("");
+      const [err, setErr] = useState("");
 
-  return `
-    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 12px;">
-      <div>
-        <h2>${s.name}</h2>
-        <span style="color:var(--text-muted); font-size:14px;">Target Completion: <b>${s.end}</b> | Current Phase: <b>${s.stage}</b></span>
-      </div>
-    </div>
+      const submit = () => {
+        if (!email.trim() || !pw.trim()) return setErr("Enter your email and password.");
+        onLogin({ role, siteId: role === "manager" ? siteId : null, email });
+      };
 
-    ${tier !== 'green' ? `
-      <div class="banner ${tier}">
-        <span>
-          <b>Regulatory Attention Required:</b> Telemetry exceeds ${tier === 'red' ? 'critical limits' : '80% amber threshold'} 
-          (Dust: ${s.dust} µg/m³, Noise: ${s.noise} dB(A), Threshold:${noiseLimit} dB(A)).
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-orange-50 p-5 flex-col gap-6">
+          <div className={`${card} w-full max-w-md p-8`}>
+            <div className="flex items-center gap-3 text-2xl font-bold">
+              <img src={LOGO_URL} alt="BuildWatch Logo" className="h-10 w-auto object-contain rounded-lg shadow-sm" />
+              BuildWatch
+            </div>
+            <p className="mt-2 text-sm text-slate-500">Site Operations Console · Environmental telemetry, misting automation and compliance.</p>
+
+            <div className="mt-6 grid grid-cols-2 gap-2">
+              {[["admin", "Administrator"], ["manager", "Site Manager"]].map(([k, l]) => (
+                <button key={k} onClick={() => setRole(k)}
+                  className={`rounded-lg border px-3 py-2.5 text-sm font-semibold transition ${role === k ? "border-orange-500 bg-orange-500 text-white" : "border-orange-200 bg-white text-slate-700 hover:bg-orange-50"}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-5 space-y-4">
+              {role === "manager" && (
+                <label className="block text-xs font-semibold uppercase text-slate-500">Assigned site
+                  <select value={siteId} onChange={(e) => setSiteId(e.target.value)} className={`${field} mt-1 font-normal normal-case`}>
+                    {sites.map((s) => <option key={s.id} value={s.id}>{s.live?.name} ({s.live?.type})</option>)}
+                  </select>
+                </label>
+              )}
+              <label className="block text-xs font-semibold uppercase text-slate-500">Email
+                <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@township.com" className={`${field} mt-1 font-normal normal-case`} />
+              </label>
+              <label className="block text-xs font-semibold uppercase text-slate-500">Password
+                <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="••••••••" className={`${field} mt-1 font-normal normal-case`} />
+              </label>
+              {err && <div className="text-sm font-medium text-red-600">{err}</div>}
+              <button onClick={submit} className={`${btn} flex w-full items-center justify-center gap-2`}>
+                <Icon name="Lock" size={16} /> Sign in to Console
+              </button>
+            </div>
+            <p className="mt-4 text-center text-xs text-slate-400">Demo mode – any non-empty credentials work.</p>
+          </div>
+        </div>
+      );
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  LEAFLET MAP
+     * ------------------------------------------------------------------ */
+    const pin = (L, hex) =>
+      L.divIcon({
+        className: "", iconSize: [26, 26], iconAnchor: [13, 13],
+        html: `<div style="width:26px;height:26px;border-radius:50%;background:${hex};border:3px solid #fff;box-shadow:0 0 0 3px ${hex}55,0 2px 6px rgba(0,0,0,.4)"></div>`,
+      });
+
+    function SiteMap({ sites, onOpen }) {
+      const c = useCfg();
+      const el = useRef(null), map = useRef(null), markers = useRef({}), openRef = useRef(onOpen);
+      openRef.current = onOpen;
+
+      useEffect(() => {
+        if (!window.L || map.current) return;
+        // Zoomed in closer (15) to match the Flutter app view
+        map.current = window.L.map(el.current).setView(CENTER, 15);
+        window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map.current);
+        return () => { map.current?.remove(); map.current = null; markers.current = {}; };
+      }, []);
+
+      useEffect(() => {
+        if (!window.L || !map.current) return;
+        sites.forEach((s) => {
+          if (!s.live) return;
+          const st = siteStatus(s, c);
+          const icon = pin(window.L, STATUS[st].hex);
+          const tip = `<b>${s.live.name}</b><br/>${STATUS[st].label}`;
+          
+          if (markers.current[s.id]) {
+            // Actively snaps pins into place if coordinates change
+            markers.current[s.id]
+              .setLatLng([s.live.lat, s.live.lng])
+              .setIcon(icon)
+              .setTooltipContent(tip);
+          } else {
+            markers.current[s.id] = window.L.marker([s.live.lat, s.live.lng], { icon }).addTo(map.current)
+              .bindTooltip(tip, { direction: "top", offset: [0, -12] }).on("click", () => openRef.current(s.id));
+          }
+        });
+      }, [sites, c]);
+
+      return (
+        <div className={`relative overflow-hidden ${card}`}>
+          <div ref={el} style={{ height: 380, zIndex: 0 }} />
+          <div className="absolute bottom-3 left-3 flex gap-3 rounded-lg bg-white/95 px-3 py-2 text-xs font-medium text-slate-700 shadow" style={{ zIndex: 500 }}>
+            {Object.values(STATUS).map((s) => (
+              <span key={s.label} className="flex items-center gap-1.5"><i className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: s.hex }} /> {s.label}</span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  OVERVIEW PAGE
+     * ------------------------------------------------------------------ */
+    function OverviewPage({ sites, onOpen }) {
+      const c = useCfg();
+      return (
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold">Map Overview</h1>
+            <p className="text-sm text-slate-500">{sites.length} active site{sites.length > 1 ? "s" : ""}</p>
+          </div>
+          <SiteMap sites={sites} onOpen={onOpen} />
+          <div className="grid gap-3 md:grid-cols-2">
+            {sites.map((s) => {
+              const st = siteStatus(s, c);
+              return (
+                <button key={s.id} onClick={() => onOpen(s.id)} className={`${card} flex items-center gap-4 p-4 text-left transition hover:bg-orange-50`}>
+                  <span className="h-14 w-1.5 rounded-full" style={{ background: STATUS[st].hex }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold">{s.live?.name}</div>
+                    <div className="mt-0.5 flex items-center gap-1 text-sm text-slate-500">
+                      <Icon name="MapPin" size={13} /> {s.live?.type}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <StatusPill status={st} />
+                      <span className="text-xs font-medium text-slate-500">{(s.config?.schDetailed || []).filter((w) => workState(w) === "active").length} works ongoing</span>
+                    </div>
+                  </div>
+                  <Icon name="ChevronRight" size={18} className="text-orange-500" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  AREA DEEP-DIVE
+     * ------------------------------------------------------------------ */
+    function LevelChip({ kind, level, limit }) {
+      const iconName = kind === "noise" ? "Volume2" : "Wind";
+      return (
+        <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold ${LVL[level].cls}`}>
+          <Icon name={iconName} size={12} /> {LVL[level].label} · ≤{limit} {kind === "noise" ? "dB" : "µg/m³"}
         </span>
-        <button class="b ${tier === 'red' ? 'danger' : 'warn'}" style="padding: 4px 10px; font-size: 13px;" onclick="logSupervisorAction('Immediate site misting and equipment throttling')">
-          Acknowledge & Log Action
-        </button>
-      </div>
-    ` : ''}
+      );
+    }
 
-    <div class="grid-2">
-      <div class="card">
-        <h3>Dust Concentration (PM2.5 / PM10)</h3>
-        <div style="display:flex; justify-content:space-between; align-items:baseline;">
-          <div class="big-num" style="color: ${s.dust >= cfg.dust.red ? 'var(--red)' : s.dust >= cfg.dust.amber ? 'var(--amber)' : 'var(--green)'}">
-            ${s.dust} <span style="font-size: 18px; color: var(--text-muted); font-weight: 400;">µg/m³</span>
+    function AreaPanel({ site, area: a, ev, onClose, onAction }) {
+      const c = useCfg();
+      const ck = check(site, a, c);
+      const mist = ck.mist;
+      const cut = mist ? Math.max(0, Math.round((1 - a.pm25 / a.pre) * 100)) : 0;
+      const verdict = (bad) => (
+        <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${bad ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}`}>
+          {bad ? "Breached" : "Within limit"}
+        </span>
+      );
+
+      return (
+        <div className={`${card} p-5`}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-orange-500 text-lg font-bold text-white">{a.id}</span>
+              <div>
+                <h2 className="text-xl font-bold">Area {a.id}</h2>
+                <div className="mt-1"><StatusPill status={ck.status} /></div>
+              </div>
+            </div>
+            <button onClick={onClose} className="rounded-full p-2 hover:bg-orange-100" aria-label="Close">
+              <Icon name="X" size={20} />
+            </button>
           </div>
-          <span style="font-size:13px; color:var(--text-muted)">Red Limit: <b>${cfg.dust.red} µg/m³</b></span>
-        </div>
-        <div class="bar-bg">
-          <div class="bar-fill" style="width: ${Math.min(100, (s.dust / cfg.dust.red) * 100)}%; background: ${s.dust >= cfg.dust.red ? 'var(--red)' : s.dust >= cfg.dust.amber ? 'var(--amber)' : 'var(--green)'};"></div>
-        </div>
-        <p style="font-size:13px; color:var(--text-muted); margin-top: 4px;">Humidity gate: <b>${s.hum}% RH</b> ${s.hum > 90 ? '(Spraying locked: Saturated atmosphere)' : '(Sensor reliable)'}</p>
-      </div>
 
-      <div class="card">
-        <h3>Acoustic Sound Level (LAeq 5-Min)</h3>
-        <div style="display:flex; justify-content:space-between; align-items:baseline;">
-          <div class="big-num" style="color: ${s.noise >= noiseLimit ? 'var(--red)' : s.noise >= noiseLimit * 0.8 ? 'var(--amber)' : 'var(--green)'}">
-            ${s.noise} <span style="font-size: 18px; color: var(--text-muted); font-weight: 400;">dB(A)</span>
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <section className="rounded-xl bg-orange-50 p-4">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+                <Icon name="HardHat" size={16} className="text-orange-500" /> Work Done / Current Activity
+              </div>
+              {ck.works.length ? ck.works.map((w) => {
+                const taskName = w.type === "Others" && w.customType ? w.customType : w.type;
+                return (
+                  <div key={w.id} className="mt-3">
+                    <div className="font-semibold">Active Work: {taskName}</div>
+                    <div className="mt-1.5 flex flex-wrap gap-2">
+                      <LevelChip kind="noise" level={w.noise} limit={c.levels[w.noise].noise} />
+                      <LevelChip kind="dust" level={w.dust} limit={c.levels[w.dust].dust} />
+                    </div>
+                  </div>
+                );
+              }) : <div className="mt-3 font-semibold">No active work – baseline (Light) limits apply</div>}
+              <div className="mt-4 text-xs text-slate-500">
+                Expected for this area: Noise {LVL[ck.noiseLvl].label} ≤{ck.noiseLimit} dB · Dust {LVL[ck.dustLvl].label} ≤{ck.dustLimit} µg/m³
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-orange-100 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 font-semibold">
+                  <Icon name="Wind" size={16} className="text-orange-500" /> Dust Breach
+                </h3>
+                {verdict(ck.dustBreach)}
+              </div>
+              <div className="text-4xl font-bold tabular-nums">{a.pm25}<span className="ml-1 text-sm font-normal text-slate-500">µg/m³ PM2.5</span></div>
+              <div className="text-sm text-slate-500">PM10: {a.pm10} µg/m³ · Limit {ck.dustLimit}</div>
+              <div className="mt-4 rounded-lg bg-orange-50 p-3">
+                <div className="text-xs font-semibold uppercase text-slate-500">Automated Mitigation</div>
+                <div className="mt-1 flex items-center gap-2 font-medium">
+                  <span className={`h-2.5 w-2.5 rounded-full ${mist ? "animate-pulse bg-sky-500" : "bg-slate-400"}`} />
+                  Automatic Water Misting: {mist ? `Active – runs until PM2.5 ≤ ${ck.dustTarget} µg/m³` : "Standby"}
+                </div>
+              </div>
+              <div className="mt-4">
+                <div className="text-xs font-semibold uppercase text-slate-500">Post-Mitigation Impact</div>
+                {mist ? (
+                  <>
+                    {[["Before misting", a.pre, "bg-red-500"], ["After misting", a.pm25, "bg-green-500"]].map(([l, v, col]) => (
+                      <div key={l} className="mt-2">
+                        <div className="flex justify-between text-xs"><span>{l}</span><span className="tabular-nums">{v} µg/m³</span></div>
+                        <div className="mt-1 h-2.5 rounded-full bg-orange-50"><div className={`h-full rounded-full ${col}`} style={{ width: `${Math.min(100, (v / a.pre) * 100)}%` }} /></div>
+                      </div>
+                    ))}
+                    <div className="mt-2 text-sm font-semibold text-green-700">Dust suppressed by {cut}% after misting</div>
+                    <div className="text-xs text-slate-500">Misting stops at ≤ {ck.dustTarget} µg/m³ (threshold {ck.dustLimit}, minus {c.mistMargin}%)</div>
+                  </>
+                ) : <div className="mt-1 text-sm text-slate-500">No misting needed – within expected limits.</div>}
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-orange-100 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 font-semibold">
+                  <Icon name="Volume2" size={16} className="text-orange-500" /> Noise Breach
+                </h3>
+                {verdict(ck.noiseBreach)}
+              </div>
+              <div className={`text-4xl font-bold tabular-nums ${ck.noiseBreach ? "text-red-600" : ""}`}>{a.db}<span className="ml-1 text-sm font-normal text-slate-500">dB(A)</span></div>
+              <div className="text-sm text-slate-500">Limit for {LVL[ck.noiseLvl].label} work: {ck.noiseLimit} dB(A)</div>
+              <label className="mt-4 flex items-center gap-2 rounded-lg bg-orange-50 p-3 text-sm font-medium">
+                <input type="checkbox" checked={ck.noiseBreach} readOnly className="h-4 w-4 accent-orange-500" />
+                {ck.noiseBreach ? "Alert automatically dispatched to Site Manager" : "No alert required"}
+              </label>
+              <div className="mt-4">
+                <div className="text-xs font-semibold uppercase text-slate-500">Actions Taken</div>
+                <select value={ev?.action ?? ""} disabled={!ev} onChange={(e) => onAction(ev.id, e.target.value)} className={`${field} mt-1 disabled:opacity-50`}>
+                  <option value="">{ev ? "— No action recorded —" : "— No active noise breach —"}</option>
+                  {ACTIONS.map((x) => <option key={x}>{x}</option>)}
+                </select>
+                {ev && !ev.action && (
+                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2.5 py-1 text-xs font-bold uppercase text-white">
+                    <Icon name="AlertTriangle" size={12} /> Action Taken: No · Pending Response
+                  </div>
+                )}
+                {ev?.action && <div className="mt-2 text-sm font-medium text-green-700">✓ {ev.action}</div>}
+              </div>
+            </section>
           </div>
-          <span style="font-size:13px; color:var(--text-muted)">Current Band Limit: <b>${noiseLimit} dB(A)</b></span>
         </div>
-        <div class="bar-bg">
-          <div class="bar-fill" style="width: ${Math.min(100, (s.noise / noiseLimit) * 100)}%; background: ${s.noise >= noiseLimit ? 'var(--red)' : s.noise >= noiseLimit * 0.8 ? 'var(--amber)' : 'var(--green)'};"></div>
+      );
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  SITE DETAILS & SCHEDULE
+     * ------------------------------------------------------------------ */
+    const len = (w) => { const m = Math.max(1, Math.round((w.end - w.start) / 60000)); return m >= 60 ? `${(m / 60).toFixed(1).replace(".0", "")} h` : `${m} min`; };
+    const BAR = { light: "bg-orange-200 text-orange-900", moderate: "bg-orange-400 text-white", heavy: "bg-orange-600 text-white" };
+
+    function LvlTag({ level, limit, unit }) {
+      return (
+        <span className={`inline-block whitespace-nowrap rounded-md border px-2 py-0.5 text-xs font-semibold ${LVL[level].cls}`}>
+          {LVL[level].label} <span className="font-normal opacity-80">≤{limit} {unit}</span>
+        </span>
+      );
+    }
+
+    function Gantt({ site, now, onOpen }) {
+      const H = 3600000, ws = site.config?.schDetailed || [];
+      const t0 = at(8), t1 = at(18);
+      const span = t1 - t0, pos = (t) => ((t - t0) / span) * 100;
+      const hr = (t) => { const h = new Date(t).getHours(); return `${h % 12 || 12}${h < 12 ? "am" : "pm"}`; };
+      const ticks = []; for (let t = t0; t <= t1; t += H) ticks.push(t);
+      const nowRatio = now >= t0 && now <= t1 ? (now - t0) / span : null;
+
+      return (
+        <div className="overflow-x-auto">
+          <div className="relative" style={{ minWidth: 560 }}>
+            <div className="flex">
+              <div className="w-16 shrink-0" />
+              <div className="relative h-6 flex-1">
+                {ticks.map((t) => <span key={t} className="absolute -translate-x-1/2 text-[11px] font-medium text-slate-400" style={{ left: `${pos(t)}%` }}>{hr(t)}</span>)}
+              </div>
+            </div>
+            {(site.areas || []).map((a) => {
+              const ends = [];
+              const placed = ws.filter((w) => w.area === a.id).sort((x, y) => x.start - y.start).map((w) => {
+                let i = ends.findIndex((e) => e <= w.start); if (i < 0) i = ends.length; ends[i] = w.end; return [w, i];
+              });
+              return (
+                <div key={a.id} className="flex border-t border-orange-100">
+                  <div className="w-16 shrink-0 py-2.5 text-xs font-bold uppercase text-slate-500">Area {a.id}</div>
+                  <div className="relative flex-1" style={{ height: Math.max(1, ends.length) * 30 + 8 }}>
+                    {ticks.map((t) => <i key={t} className="absolute bottom-0 top-0 w-px bg-orange-50" style={{ left: `${pos(t)}%` }} />)}
+                    {placed.map(([w, i]) => {
+                      const taskName = w.type === "Others" && w.customType ? w.customType : w.type;
+                      return (
+                        <button key={w.id} onClick={() => onOpen(a.id)} title={`${taskName} · ${fmt(w.start)} – ${fmt(w.end)}`}
+                          className={`absolute truncate rounded-md px-2 text-left text-xs font-semibold ${BAR[maxLvl([w.noise, w.dust])]} ${workState(w, now) === "done" ? "opacity-50" : ""}`}
+                          style={{ left: `${pos(w.start)}%`, width: `${((w.end - w.start) / span) * 100}%`, top: 4 + i * 30, height: 26, lineHeight: "26px" }}>
+                          {taskName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            {nowRatio !== null && (
+              <div className="pointer-events-none absolute bottom-0 top-6" style={{ left: `calc(4rem + (100% - 4rem) * ${nowRatio})`, width: 2, background: "#dc2626" }}>
+                <span className="absolute -top-5 -translate-x-1/2 rounded bg-red-600 px-1.5 text-[10px] font-bold uppercase text-white" style={{ left: 1 }}>Now</span>
+              </div>
+            )}
+          </div>
         </div>
-        <p style="font-size:13px; color:var(--text-muted); margin-top: 4px;">Time Zone: <b>${currentHour >= 7 && currentHour < 19 ? 'Day (07:00-19:00)' : currentHour >= 19 && currentHour < 22 ? 'Evening (19:00-22:00)' : 'Night (22:00-07:00)'}</b></p>
-      </div>
-    </div>
+      );
+    }
 
-    <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h3>24-Hour Historical Compliance Envelope</h3>
-        <span style="font-size:12px; color:var(--text-muted)">Rolling 24-hr samples (00:00 to 23:00)</span>
-      </div>
-      <div class="strip-24h">
-        ${s.hist.map((h, idx) => {
-          const lim = getNoiseLimit(idx);
-          const t = getStatusTier(h.d, h.n, lim);
-          const col = t === 'green' ? 'var(--green)' : t === 'amber' ? 'var(--amber)' : 'var(--red)';
-          return `<div title="Hour ${idx}:00 \vert{} Dust:${h.d} µg/m³ | Noise: ${h.n} dB(A)" style="background:${col}"></div>`;
-        }).join('')}
-      </div>
-      <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted);">
-        <span>00:00</span>
-        <span>06:00</span>
-        <span>12:00</span>
-        <span>18:00</span>
-        <span>23:00</span>
-      </div>
-    </div>
+    function Schedule({ site, onOpen }) {
+      const c = useCfg();
+      const now = clock();
+      const sorted = [...(site.config?.schDetailed || [])].sort((a, b) => a.start - b.start || a.area - b.area);
+      const live = sorted.filter((w) => workState(w, now) === "active").length;
+      const done = sorted.filter((w) => workState(w, now) === "done").length;
+      const weekly = site.config?.weeklyPlan || [];
 
-    <div class="grid-2">
-      <div class="card">
-        <h3>IoT Misting Suppression Automation</h3>
-        <div class="row" style="margin-bottom: 12px;">
-          <button class="b ${s.mode === 'auto' ? '' : 'o'}" onclick="setMistingMode('${s.id}', 'auto')">Auto Rule-Engine</button>
-          <button class="b ${s.mode === 'manual' ? '' : 'o'}" onclick="setMistingMode('${s.id}', 'manual')">Manual Override</button>
-          <button class="b ${s.pump ? 'danger' : 'warn'}" ${s.mode === 'auto' ? 'disabled' : ''} onclick="toggleManualPump('${s.id}')">
-            ${s.pump ? 'Emergency Stop Pump' : 'Start Pump (Manual)'}
-          </button>
+      return (
+        <div className="space-y-8">
+          <section>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-lg font-bold">
+                <Icon name="Clock" size={18} className="text-orange-500" /> Full Daily Work Schedule <span className="text-sm font-normal text-slate-500">8:00 AM – 6:00 PM</span>
+              </h2>
+              <div className="flex gap-2 text-xs font-semibold">
+                <span className="rounded-full bg-orange-500 px-2.5 py-1 text-white">{live} ongoing</span>
+                <span className="rounded-full bg-orange-100 px-2.5 py-1 text-orange-800">{sorted.length - live - done} upcoming</span>
+                <span className="rounded-full bg-stone-200 px-2.5 py-1 text-slate-600">{done} completed</span>
+              </div>
+            </div>
+
+            <div className={`${card} overflow-hidden`}>
+              <div className="p-4">
+                <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                  <span className="font-semibold uppercase">Timeline by area</span>
+                  {LEVELS.map((l) => <span key={l} className="flex items-center gap-1.5"><i className={`inline-block h-2.5 w-4 rounded-sm ${BAR[l].split(" ")[0]}`} /> {LVL[l].label}</span>)}
+                  <span className="text-slate-400">· bar colour = heaviest expected level</span>
+                </div>
+                <Gantt site={site} now={now} onOpen={onOpen} />
+              </div>
+
+              {live > 1 && (
+                <div className="border-t border-orange-100 bg-orange-100 px-4 py-2 text-sm font-medium text-orange-900">
+                  {live} works are running at the same time. Each area is judged against its heaviest concurrent work.
+                </div>
+              )}
+
+              <div className="overflow-x-auto border-t border-orange-100">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-orange-50 text-xs uppercase text-orange-700">
+                    <tr>
+                      <th className="py-2.5 pl-4 pr-3">Time</th><th className="px-3">Work</th><th className="px-3">Area</th>
+                      <th className="px-3">Expected noise</th><th className="px-3">Expected dust</th><th className="px-3 pr-4">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-orange-100">
+                    {sorted.map((w) => {
+                      const st = workState(w, now), a = (site.areas || []).find((x) => x.id === w.area), ck = a ? check(site, a, c, now) : { noiseBreach: false, dustBreach: false };
+                      const taskName = w.type === "Others" && w.customType ? w.customType : w.type;
+                      const chips = [];
+                      
+                      if (ck.noiseBreach) chips.push(["red", `Noise breach · ${a?.db} dB`]);
+                      if (ck.dustBreach) chips.push(["amber", `Dust breach · ${a?.pm25}`]);
+                      if (st === "active" && !chips.length) chips.push(["green", "Within limits"]);
+                      
+                      return (
+                        <tr key={w.id} onClick={() => onOpen(w.area)}
+                          className={`cursor-pointer hover:bg-orange-50 ${st === "active" ? "bg-orange-50" : ""} ${st === "done" ? "opacity-60" : ""}`}>
+                          <td className="whitespace-nowrap py-3 pl-4 pr-3 font-mono font-semibold tabular-nums" style={st === "active" ? { boxShadow: "inset 4px 0 0 #f97316" } : undefined}>
+                            {fmt(w.start)} – {fmt(w.end)}
+                            <div className="font-sans text-xs font-normal text-slate-400">{len(w)}</div>
+                          </td>
+                          <td className="px-3 py-3 font-semibold">{taskName}</td>
+                          <td className="px-3 py-3"><span className="rounded-md bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-700">Area {w.area}</span></td>
+                          <td className="px-3 py-3"><LvlTag level={w.noise} limit={c.levels[w.noise].noise} unit="dB" /></td>
+                          <td className="px-3 py-3"><LvlTag level={w.dust} limit={c.levels[w.dust].dust} unit="µg/m³" /></td>
+                          <td className="px-3 py-3 pr-4">
+                            {st === "active" ? (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="flex items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[11px] font-bold uppercase text-white"><i className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Live</span>
+                                {chips.map(([k, t]) => <span key={t} className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS[k].pill}`}>{t}</span>)}
+                              </div>
+                            ) : st === "done"
+                              ? <span className="flex items-center gap-1 text-xs font-semibold text-slate-500"><Icon name="CheckCircle2" size={14} /> Completed</span>
+                              : <span className="text-xs font-semibold uppercase text-orange-600">Upcoming</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          {weekly.length > 0 && (
+            <section>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-lg font-bold">
+                  <Icon name="CalendarDays" size={18} className="text-orange-500" /> Monthly Project Plan
+                </h2>
+              </div>
+              <div className={`${card} overflow-hidden`}>
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-orange-50 text-xs uppercase text-orange-700">
+                    <tr><th className="py-2.5 pl-4 pr-3 w-1/3">Timeline Block</th><th className="px-3">Primary Task Focus</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-orange-100">
+                    {weekly.map((w, i) => {
+                      const taskName = w.task === "Others" && w.customTask ? w.customTask : w.task;
+                      return (
+                        <tr key={i} className="hover:bg-orange-50">
+                          <td className="py-3 pl-4 pr-3 font-semibold">{w.week}</td>
+                          <td className="px-3 py-3">{taskName}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
         </div>
-        <p style="font-size: 14px; margin-bottom: 6px;">
-          Pump Relay Status: <b style="color:${s.pump ? 'var(--accent)' : 'inherit'}">${s.pump ? '⚡ RUNNING (Discharging mist)' : 'OFF / STANDBY'}</b><br>
-          Water Reservoir Tank: <b>${Math.round(s.tank)} L</b> / ${s.tankMax} L (${Math.round((s.tank/s.tankMax)*100)}%)<br>
-          Last Cycle Discharged: <b>${s.lastRun ? fmtDateTime(s.lastRun) : 'No discharges today'}</b>
-        </p>
-        <div class="bar-bg">
-          <div class="bar-fill" style="width: ${(s.tank / s.tankMax) * 100}%; background: var(--accent);"></div>
+      );
+    }
+
+    function SiteDetail({ site, sites, onSelect, events, onAction }) {
+      const c = useCfg();
+      const [openId, setOpenId] = useState(null);
+      const panel = useRef(null);
+      useEffect(() => { if (openId) panel.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [openId]);
+      
+      const { n, d } = peakOf(site);
+      const cn = check(site, n, c), cd = check(site, d, c);
+      const selected = (site.areas || []).find((a) => a.id === openId);
+      const ev = selected && events.find((e) => e.siteId === site.id && e.area === selected.id && e.kind === "noise" && !e.end);
+
+      return (
+        <div className="space-y-6">
+          {sites.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase text-slate-500">Select site</span>
+              {sites.map((x) => (
+                <button key={x.id} onClick={() => onSelect(x.id)}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition ${x.id === site.id ? "border-orange-500 bg-orange-500 text-white" : "border-orange-200 bg-white text-slate-700 hover:bg-orange-50"}`}>
+                  <i className="h-2.5 w-2.5 rounded-full border border-white" style={{ background: STATUS[siteStatus(x, c)].hex }} /> {x.live?.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h1 className="text-2xl font-bold">{site.live?.name}</h1>
+              <div className="flex items-center gap-1 text-sm text-slate-500"><Icon name="MapPin" size={13} /> {site.live?.type}</div>
+            </div>
+            <StatusPill status={siteStatus(site, c)} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Meter iconName="Volume2" label="Noise" value={n.db} unit="dB(A)" limit={cn.noiseLimit} sub="Peak across all floors" caption={`Source: Area ${n.id} · expected ${LVL[cn.noiseLvl].label}`} />
+            <Meter iconName="Wind" label="Dust PM2.5 / PM10" value={d.pm25} unit="µg/m³" limit={cd.dustLimit} sub={`PM10: ${d.pm10} µg/m³`} caption={`Source: Area ${d.id} · expected ${LVL[cd.dustLvl].label}`} />
+          </div>
+
+          <section>
+            <h2 className="mb-2 text-lg font-bold">Areas &amp; Zone Status</h2>
+            <div className={`${card} divide-y divide-orange-100 overflow-hidden`}>
+              {(site.areas || []).map((a) => {
+                const ck = check(site, a, c), S = STATUS[ck.status], on = openId === a.id;
+                const sub = ck.noiseBreach ? `Noise breach · ${a.db} dB (limit ${ck.noiseLimit})` : ck.dustBreach ? `Dust breach · misting active (limit ${ck.dustLimit})` : ck.mist ? `Misting until PM2.5 ≤ ${ck.dustTarget} µg/m³` : "Within limits";
+                return (
+                  <Fragment key={a.id}>
+                    <button onClick={() => setOpenId(on ? null : a.id)} className={`flex w-full items-center gap-4 px-4 py-3.5 text-left hover:bg-orange-50 ${on ? "bg-orange-50" : ""}`}>
+                      <span className={`flex h-10 w-10 items-center justify-center rounded-full font-bold ${on ? "bg-orange-500 text-white" : "bg-orange-100 text-orange-700"}`}>{a.id}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold">Area {a.id}</span>
+                        <span className="block truncate text-sm text-slate-500">{sub} · {ck.works.length} ongoing</span>
+                      </span>
+                      <Icon name={S.iconName} size={20} className={S.iconCls} />
+                      <span className="hidden sm:block"><StatusPill status={ck.status} /></span>
+                      <Icon name="ChevronRight" size={18} className={`text-orange-500 transition ${on ? "rotate-90" : ""}`} />
+                    </button>
+                    {on && (
+                      <div ref={panel} className="bg-orange-50 p-4">
+                        <AreaPanel site={site} area={a} ev={ev} onClose={() => setOpenId(null)} onAction={onAction} />
+                      </div>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </div>
+          </section>
+
+          <Schedule site={site} onOpen={setOpenId} />
         </div>
-        <small style="color:var(--text-muted)">Safety Cutoffs: Empty tank shutoff, 10 min max run, 120s cooldown hysteresis.</small>
-      </div>
+      );
+    }
 
-      <div class="card">
-        <h3>Water Conservation vs Baseline Timer</h3>
-        ${renderWaterChart(s)}
-      </div>
-    </div>
+    /* ------------------------------------------------------------------ *
+     *  AUDIT LOG & TIMELINE
+     * ------------------------------------------------------------------ */
+    const KIND = { noise: { label: "Noise breach", iconName: "Volume2", unit: "dB" }, dust: { label: "Dust breach", iconName: "Wind", unit: "µg/m³" } };
+    const dur = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`; };
+    const outcomeOf = (e) => (!e.end ? "In progress" : e.kind === "dust" ? "Controlled by misting" : e.action ? "Compliance restored" : "Cleared – no action logged");
 
-    <div class="card" style="border-left: 4px solid var(--accent);">
-      <h3>Supervisor Rapid Mitigation Logging</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin-bottom: 10px;">Select an onsite action taken to register into the compliance audit log:</p>
-      <div class="row">
-        <button class="b o" onclick="logSupervisorAction('Perimeter misting nozzles triggered')">💦 Perimeter Misting</button>
-        <button class="b o" onclick="logSupervisorAction('Ceased high-noise earthworks temporarily')">🛑 Work Paused</button>
-        <button class="b o" onclick="logSupervisorAction('Repositioned equipment behind acoustic barriers')">🚜 Equipment Moved</button>
-        <button class="b o" onclick="logSupervisorAction('Acoustic curtains and dust netting deployed')">🛡️ Dust & Acoustic Barriers</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3>Weekly Construction Activity & Tasks</h3>
-      <div class="grid-2" style="margin-bottom: 14px;">
-        <div>
-          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Current Phase Stage</label>
-          <select style="width:100%; margin-top:4px;" onchange="curSite().stage=this.value; renderView();">
-            ${STAGES.map(st => `<option value="${st}" ${st === s.stage ? 'selected' : ''}>${st}</option>`).join('')}
-          </select>
+    function Timeline({ e, c }) {
+      const steps = [
+        [e.start, "Breach detected", `${e.peak} ${KIND[e.kind]?.unit || ""} vs limit ${e.limit}`, "done"],
+        e.kind === "noise"
+          ? [e.start, "Alert dispatched", "Sent automatically to Site Manager", "done"]
+          : [e.start, "Auto misting started", `Runs until PM2.5 ≤ ${Math.round(e.limit * (1 - c.mistMargin / 100))} µg/m³`, "done"],
+        ...(e.kind === "noise" ? [e.actionAt
+          ? [e.actionAt, "Action taken", e.action, "done"]
+          : [null, e.end ? "No action recorded" : "Awaiting manager action", "Pending response", e.end ? "skip" : "wait"]] : []),
+        e.end ? [e.end, "Resolved", outcomeOf(e), "done"] : [null, "Ongoing", `Ongoing for ${dur(clock() - e.start)}`, "wait"],
+      ];
+      return (
+        <div className="flex flex-wrap gap-3">
+          {steps.map(([t, title, sub, st], i) => (
+            <div key={i} className={`min-w-[170px] flex-1 rounded-lg border bg-white p-3 ${st === "wait" ? "border-red-200" : "border-orange-100"}`}>
+              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-500">
+                <span className={`h-2 w-2 rounded-full ${st === "done" ? "bg-green-500" : st === "wait" ? "animate-pulse bg-red-500" : "bg-slate-300"}`} />
+                {t ? fmt(t) : "—"}
+              </div>
+              <div className="mt-1 text-sm font-semibold">{title}</div>
+              <div className="text-xs text-slate-500">{sub}</div>
+            </div>
+          ))}
         </div>
-        <div>
-          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Estimated Completion Date</label>
-          <input type="date" value="${s.end}" style="width:100%; margin-top:4px;" onchange="curSite().end=this.value;">
+      );
+    }
+
+    function IncidentLog({ events, sites }) {
+      const c = useCfg();
+      const [f, setF] = useState({ site: "all", kind: "all", status: "all" });
+      const [openId, setOpenId] = useState(null);
+      const nameOf = (id) => sites.find((s) => s.id === id)?.live?.name ?? id;
+      const rows = events
+        .filter((e) => (f.site === "all" || e.siteId === f.site) && (f.kind === "all" || e.kind === f.kind)
+          && (f.status === "all" || (f.status === "open" ? !e.end : !!e.end)))
+        .sort((a, b) => b.start - a.start);
+      const response = (e) => (e.kind === "dust" ? `Auto misting · until PM2.5 ≤ ${Math.round(e.limit * (1 - c.mistMargin / 100))}` : `Alert sent to Site Manager · ${e.action || "no action yet"}`);
+
+      const stats = [
+        ["Ongoing", events.filter((e) => !e.end).length, "text-orange-600", "Breaches still happening"],
+        ["Awaiting action", events.filter((e) => !e.end && e.kind === "noise" && !e.action).length, "text-red-600", "Open noise, no action logged"],
+        ["Noise breaches", events.filter((e) => e.kind === "noise").length, "text-slate-900", "All time"],
+        ["Dust breaches", events.filter((e) => e.kind === "dust").length, "text-slate-900", "All time"],
+      ];
+
+      const exportCsv = () => {
+        const head = ["ID", "Start", "End", "Site", "Area", "Type", "Peak", "Limit", "Expected level", "Response", "Outcome"];
+        const body = rows.map((e) => [e.id, new Date(e.start).toISOString(), e.end ? new Date(e.end).toISOString() : "", nameOf(e.siteId), e.area, KIND[e.kind]?.label || e.kind, e.peak, e.limit, e.level, response(e), outcomeOf(e)]);
+        const csv = [head, ...body].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+        const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+        const link = document.createElement("a");
+        link.href = url; link.download = "buildwatch-incidents.csv"; link.click();
+        URL.revokeObjectURL(url);
+      };
+
+      const sel = (k, opts) => (
+        <select value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} className="w-auto rounded-lg border border-orange-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-orange-500">
+          {opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+      );
+
+      return (
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold">Incident Audit Log</h1>
+              <p className="text-sm text-slate-500">Every threshold breach, the automated response and the action taken – opened and closed automatically.</p>
+            </div>
+            <button onClick={exportCsv} className={`${btn} flex items-center gap-2 py-2 text-sm`}>
+              <Icon name="Download" size={15} /> Export CSV
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {stats.map(([l, v, col, hint]) => (
+              <div key={l} className={`${card} p-4`}>
+                <div className="text-xs font-semibold uppercase text-slate-500">{l}</div>
+                <div className={`mt-1 text-3xl font-bold tabular-nums ${v && col !== "text-slate-900" ? col : ""}`}>{v}</div>
+                <div className="text-xs text-slate-500">{hint}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {sites.length > 1 && sel("site", [["all", "All sites"], ...sites.map((s) => [s.id, s.live?.name || s.id])])}
+            {sel("kind", [["all", "All types"], ["noise", "Noise"], ["dust", "Dust"]])}
+            {sel("status", [["all", "All statuses"], ["open", "Ongoing"], ["resolved", "Resolved"]])}
+            <span className="self-center text-sm text-slate-500">{rows.length} incident{rows.length === 1 ? "" : "s"}</span>
+          </div>
+
+          <div className={`${card} overflow-x-auto`}>
+            <table className="w-full text-left text-sm">
+              <thead className="bg-orange-50 text-xs uppercase text-orange-700">
+                <tr>{["Incident", "Site · Area", "Type", "Reading vs limit", "Response", "Duration", "Status", ""].map((h) => <th key={h} className="px-4 py-3">{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-orange-100">
+                {rows.map((e) => {
+                  const K = KIND[e.kind] || { label: e.kind, iconName: "AlertCircle", unit: "" };
+                  const open = openId === e.id;
+                  return (
+                    <Fragment key={e.id}>
+                      <tr onClick={() => setOpenId(open ? null : e.id)} className="cursor-pointer align-top hover:bg-orange-50">
+                        <td className="px-4 py-3"><div className="font-mono font-semibold">{e.id}</div><div className="whitespace-nowrap text-xs text-slate-500">{new Date(e.start).toLocaleDateString("en-MY")} · {fmt(e.start)}</div></td>
+                        <td className="px-4 py-3"><div className="font-medium">{nameOf(e.siteId)}</div><div className="text-xs text-slate-500">Area {e.area}</div></td>
+                        <td className="px-4 py-3"><span className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium"><Icon name={K.iconName} size={14} className="text-orange-500" /> {K.label}</span></td>
+                        <td className="px-4 py-3"><div className="font-semibold tabular-nums">{e.peak} {K.unit}</div><div className="text-xs text-slate-500">limit {e.limit} · {LVL[e.level]?.label || e.level}</div></td>
+                        <td className="max-w-[220px] px-4 py-3">
+                          {response(e)}
+                          {e.kind === "noise" && !e.action && !e.end && <div className="mt-1 text-xs font-bold uppercase text-red-600">Pending response</div>}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 tabular-nums">{dur((e.end ?? clock()) - e.start)}</td>
+                        <td className="px-4 py-3">
+                          {e.end
+                            ? <div><span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-800">Resolved</span><div className="mt-1 text-xs text-slate-500">{outcomeOf(e)}</div></div>
+                            : <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-800"><i className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-600" /> Ongoing</span>}
+                        </td>
+                        <td className="px-4 py-3"><Icon name="ChevronDown" size={16} className={`text-orange-500 transition ${open ? "rotate-180" : ""}`} /></td>
+                      </tr>
+                      {open && <tr className="bg-orange-50"><td colSpan={8} className="px-4 py-4"><Timeline e={e} c={c} /></td></tr>}
+                    </Fragment>
+                  );
+                })}
+                {!rows.length && <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500">No incidents match these filters.</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      );
+    }
 
-      <div style="font-size:13px; font-weight:600; color:var(--text-muted); margin-bottom:6px;">Milestone Task Checklist</div>
-      ${s.tasks.map((task, i) => `
-        <div class="row" style="margin-bottom: 6px; justify-content: space-between; background: var(--bg); padding: 6px 10px; border-radius: 4px;">
-          <label style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" ${task.done ? 'checked' : ''} onchange="curSite().tasks[${i}].done=this.checked; renderView();">
-            <span style="${task.done ? 'text-decoration: line-through; opacity:0.6;' : ''}">${task.t}</span>
-          </label>
-          <button class="b o" style="padding: 2px 8px; font-size:12px;" onclick="curSite().tasks.splice(${i}, 1); renderView();">Remove</button>
+    /* ------------------------------------------------------------------ *
+     *  CONFIG PAGE (THRESHOLDS)
+     * ------------------------------------------------------------------ */
+    function ConfigPage({ cfg, setCfg }) {
+      const setLvl = (l, k, v) => setCfg({ ...cfg, levels: { ...cfg.levels, [l]: { ...cfg.levels[l], [k]: Number(v) || 0 } } });
+      return (
+        <div className="space-y-4">
+          <div>
+            <h1 className="text-2xl font-bold">Threshold Configuration</h1>
+            <p className="text-sm text-slate-500">Administrator only. Each scheduled work is tagged Light, Moderate or Heavy; exceeding that level's threshold counts as a breach.</p>
+          </div>
+          <div className={`${card} space-y-5 p-5`}>
+            <h3 className="font-semibold text-orange-600">Expected thresholds by work level</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="text-xs uppercase text-slate-500">
+                  <tr><th className="py-2 pr-4">Level</th><th className="pr-4">Max noise (dB)</th><th>Max dust PM2.5 (µg/m³)</th></tr>
+                </thead>
+                <tbody>
+                  {LEVELS.map((l) => (
+                    <tr key={l} className="border-t border-orange-100">
+                      <td className="py-3 pr-4"><span className={`rounded-md border px-2 py-1 text-xs font-bold ${LVL[l].cls}`}>{LVL[l].label}</span></td>
+                      <td className="pr-4"><input type="number" value={cfg.levels[l].noise} onChange={(e) => setLvl(l, "noise", e.target.value)} className={`${field} max-w-[140px]`} /></td>
+                      <td><input type="number" value={cfg.levels[l].dust} onChange={(e) => setLvl(l, "dust", e.target.value)} className={`${field} max-w-[140px]`} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <h3 className="font-semibold text-orange-600">Misting</h3>
+            <p className="text-sm text-slate-500">Misting has no fixed duration. It starts when dust exceeds its threshold and keeps running until PM2.5 has dropped below the threshold by this margin.</p>
+            <label className="block max-w-[260px] text-xs font-semibold uppercase text-slate-500">Reduction below threshold (%)
+              <input type="number" value={cfg.mistMargin} onChange={(e) => setCfg({ ...cfg, mistMargin: Number(e.target.value) || 0 })} className={`${field} mt-1 font-normal`} />
+            </label>
+            <button onClick={() => setCfg(DEFAULT_CFG)} className="rounded-lg border border-orange-300 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-50 transition">Reset to defaults</button>
+          </div>
         </div>
-      `).join('')}
+      );
+    }
+    
+    /* ------------------------------------------------------------------ *
+     *  SCHEDULE MANAGER (ADMIN)
+     * ------------------------------------------------------------------ */
+    function ScheduleManager({ sites, onSaveSiteConfig }) {
+      const [siteId, setSiteId] = useState(sites.length ? sites[0].id : "");
+      
+      const site = sites.find(s => s.id === siteId);
+      const [daily, setDaily] = useState([]);
+      const [weekly, setWeekly] = useState([]);
+      const [saved, setSaved] = useState(false);
+      
+      const loadedRef = useRef(null);
+      
+      useEffect(() => {
+        if (site && site.config && loadedRef.current !== siteId) {
+          setDaily([...(site.config.schDetailed || [])]);
+          setWeekly([...(site.config.weeklyPlan || [])]);
+          loadedRef.current = siteId;
+        }
+      }, [siteId, site]);
 
-      <div class="row" style="margin-top: 10px;">
-        <input id="new-task-input" placeholder="Add compliance or mitigation task..." style="flex-grow:1;">
-        <button class="b" onclick="addTask()">Add Task</button>
-      </div>
+      const handleSave = () => {
+        if (!site) return;
+        const newConfig = { ...site.config, schDetailed: daily, weeklyPlan: weekly };
+        onSaveSiteConfig(site.id, newConfig);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      };
 
-      <div style="margin-top: 14px;">
-        <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Weekly Environmental Notes</label>
-        <textarea rows="2" style="width:100%; margin-top:4px;" placeholder="Document mitigation plans, weather alerts..." oninput="curSite().plan=this.value">${s.plan}</textarea>
-      </div>
-    </div>
-  `;
-}
+      const addDaily = () => setDaily([...daily, { id: `d_${Date.now()}`, area: 1, start: tm("09:00"), end: tm("17:00"), type: "Wall Hacking & Demolition", customType: "", noise: "heavy", dust: "heavy" }]);
+      const updateDaily = (idx, field, val) => {
+        const arr = [...daily];
+        if (field === 'startStr' || field === 'endStr') {
+          arr[idx][field === 'startStr' ? 'start' : 'end'] = tm(val);
+        } else {
+          arr[idx][field] = val;
+        }
+        setDaily(arr);
+      };
+      const removeDaily = (idx) => setDaily(daily.filter((_, i) => i !== idx));
 
-function renderIncidentsView() {
-  const s = curSite();
-  const incidents = currentUser.role === 'admin' ? dbEvents : dbEvents.filter(e => e.siteId === s.id);
+      const addWeekly = () => setWeekly([...weekly, { id: `w_${Date.now()}`, week: `Week ${weekly.length + 1}`, task: "HVAC Ducting & Piping", customTask: "" }]);
+      const updateWeekly = (idx, field, val) => { const arr = [...weekly]; arr[idx][field] = val; setWeekly(arr); };
+      const removeWeekly = (idx) => setWeekly(weekly.filter((_, i) => i !== idx));
 
-  return `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
-      <div>
-        <h2>Environmental Incidents & Actuation Audit</h2>
-        <span style="color:var(--text-muted); font-size:14px;">Compliance trail of automated triggers and manual interventions.</span>
-      </div>
-      <div class="row noprint">
-        <button class="b o" onclick="exportIncidentsCSV()">Export CSV</button>
-        <button class="b" onclick="window.print()">Print Regulatory Report</button>
-      </div>
-    </div>
+      return (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold">Manage Work Schedules</h1>
+              <p className="text-sm text-slate-500">Administrator only. Define daily granular tasks for telemetry thresholding, and the long-term monthly/weekly plan.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {saved && <span className="text-sm font-bold text-green-600">✓ Saved successfully</span>}
+              <button onClick={handleSave} className={btn}><Icon name="Save" size={16} className="inline mr-2" /> Publish to App</button>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-orange-100 border border-orange-200">
+            <span className="font-semibold uppercase text-xs text-orange-800">Editing Site:</span>
+            <select value={siteId} onChange={e => setSiteId(e.target.value)} className="rounded-lg border-orange-300 px-3 py-1.5 text-sm font-semibold outline-none focus:border-orange-500">
+              {sites.map(s => <option key={s.id} value={s.id}>{s.live?.name}</option>)}
+            </select>
+          </div>
 
-    <div class="card">
-      <table>
-        <thead>
-          <tr>
-            <th>Event ID</th>
-            <th>Logged Time</th>
-            <th>Site Reference</th>
-            <th>Breach / Event Type</th>
-            <th>Pre-Reading</th>
-            <th>Mitigation Action Executed</th>
-            <th>Post-Reading</th>
-            <th>Water Used</th>
-            <th>Audit Outcome</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${incidents.map(ev => `
-            <tr>
-              <td><b>${ev.id}</b></td>
-              <td>${fmtDateTime(ev.time)}</td>
-              <td>${ev.siteId.toUpperCase()}</td>
-              <td><span class="chip" style="background:${ev.type.includes('Dust') ? 'var(--amber)' : 'var(--red)'}">${ev.type}</span></td>
-              <td style="font-family:var(--font-mono);">${ev.before}</td>
-              <td>${ev.action}</td>
-              <td style="font-family:var(--font-mono);">${ev.after || '--'}</td>
-              <td>${ev.litres} Litres</td>
-              <td><b>${ev.outcome}</b></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
+          {/* DAILY SCHEDULE BUILDER */}
+          <div className={`${card} p-5`}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg">Full Daily Work Schedule</h3>
+              <button onClick={addDaily} className="text-sm font-bold text-orange-600 hover:text-orange-700 bg-orange-50 px-3 py-1.5 rounded-md">+ Add Block</button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="p-3">Area</th><th className="p-3">Time</th><th className="p-3">Task Category</th>
+                    <th className="p-3">Expected Noise</th><th className="p-3">Expected Dust</th><th className="p-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {daily.map((w, idx) => (
+                    <tr key={w.id}>
+                      <td className="p-2"><input type="number" min="1" value={w.area} onChange={e => updateDaily(idx, 'area', parseInt(e.target.value))} className={`${field} w-16 text-center`} /></td>
+                      <td className="p-2">
+                        <div className="flex items-center gap-1">
+                          <input type="time" value={toTimeStr(w.start)} onChange={e => updateDaily(idx, 'startStr', e.target.value)} className={field} />
+                          <span className="text-slate-400">-</span>
+                          <input type="time" value={toTimeStr(w.end)} onChange={e => updateDaily(idx, 'endStr', e.target.value)} className={field} />
+                        </div>
+                      </td>
+                      <td className="p-2">
+                        <select value={w.type} onChange={e => updateDaily(idx, 'type', e.target.value)} className={`${field} mb-1`}>
+                          {TASK_OPTS.map(opt => <option key={opt}>{opt}</option>)}
+                        </select>
+                        {w.type === "Others" && <input type="text" placeholder="Specify..." value={w.customType || ""} onChange={e => updateDaily(idx, 'customType', e.target.value)} className={field} />}
+                      </td>
+                      <td className="p-2"><select value={w.noise} onChange={e => updateDaily(idx, 'noise', e.target.value)} className={field}>{LEVELS.map(l => <option key={l} value={l}>{LVL[l].label}</option>)}</select></td>
+                      <td className="p-2"><select value={w.dust} onChange={e => updateDaily(idx, 'dust', e.target.value)} className={field}>{LEVELS.map(l => <option key={l} value={l}>{LVL[l].label}</option>)}</select></td>
+                      <td className="p-2 text-right"><button onClick={() => removeDaily(idx)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Icon name="Trash2" size={16}/></button></td>
+                    </tr>
+                  ))}
+                  {daily.length === 0 && <tr><td colSpan={6} className="p-4 text-center text-slate-500">No daily tasks scheduled.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-function renderSettingsView() {
-  return `
-    <h2>Central Environmental Threshold Configuration</h2>
-    <div class="card">
-      <h3>Particulate Matter Limits (PM2.5 / PM10)</h3>
-      <div class="grid-2">
-        <div>
-          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Red Critical Limit (µg/m³)</label>
-          <input type="number" value="${cfg.dust.red}" style="width:100%; margin-top:4px;" onchange="cfg.dust.red=+this.value;">
+          {/* MONTHLY PLAN BUILDER */}
+          <div className={`${card} p-5`}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg">Monthly Project Plan</h3>
+              <button onClick={addWeekly} className="text-sm font-bold text-orange-600 hover:text-orange-700 bg-orange-50 px-3 py-1.5 rounded-md">+ Add Block</button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr><th className="p-3 w-1/3">Timeline Block (e.g., Week 1, Oct 1-7)</th><th className="p-3">Primary Task Focus</th><th className="p-3"></th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {weekly.map((w, idx) => (
+                    <tr key={w.id}>
+                      <td className="p-2"><input type="text" value={w.week} onChange={e => updateWeekly(idx, 'week', e.target.value)} placeholder="Week 1" className={field} /></td>
+                      <td className="p-2">
+                        <select value={w.task} onChange={e => updateWeekly(idx, 'task', e.target.value)} className={`${field} mb-1`}>
+                          {TASK_OPTS.map(opt => <option key={opt}>{opt}</option>)}
+                        </select>
+                        {w.task === "Others" && <input type="text" placeholder="Specify custom task..." value={w.customTask || ""} onChange={e => updateWeekly(idx, 'customTask', e.target.value)} className={field} />}
+                      </td>
+                      <td className="p-2 text-right"><button onClick={() => removeWeekly(idx)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Icon name="Trash2" size={16}/></button></td>
+                    </tr>
+                  ))}
+                  {weekly.length === 0 && <tr><td colSpan={3} className="p-4 text-center text-slate-500">No weekly plan scheduled.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
         </div>
-        <div>
-          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Amber Advisory Limit (µg/m³)</label>
-          <input type="number" value="${cfg.dust.amber}" style="width:100%; margin-top:4px;" onchange="cfg.dust.amber=+this.value;">
-        </div>
-      </div>
+      );
+    }
 
-      <h3 style="margin-top: 20px;">Time-Based Acoustic Limits</h3>
-      <div class="grid-3">
-        <div>
-          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Day (07:00 - 19:00) dB(A)</label>
-          <input type="number" value="${cfg.noise.day}" style="width:100%; margin-top:4px;" onchange="cfg.noise.day=+this.value;">
-        </div>
-        <div>
-          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Evening (19:00 - 22:00) dB(A)</label>
-          <input type="number" value="${cfg.noise.eve}" style="width:100%; margin-top:4px;" onchange="cfg.noise.eve=+this.value;">
-        </div>
-        <div>
-          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Night (22:00 - 07:00) dB(A)</label>
-          <input type="number" value="${cfg.noise.night}" style="width:100%; margin-top:4px;" onchange="cfg.noise.night=+this.value;">
-        </div>
-      </div>
+    /* ------------------------------------------------------------------ *
+     *  APP SHELL & FIREBASE SYNC LOGIC
+     * ------------------------------------------------------------------ */
+    function App() {
+      const [isLoaded, setIsLoaded] = useState(false);
+      const [session, setSession] = useState(null);
+      const [view, setView] = useState({ page: "overview", siteId: null });
+      const [sites, setSites] = useState([]);
+      const [events, setEvents] = useState([]);
+      const [cfg, setCfg] = useState(DEFAULT_CFG);
 
-      <h3 style="margin-top: 20px;">Misting Automation & Failsafe Parameters</h3>
-      <div class="grid-3">
-        <div>
-          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Mist Discharge Run (Seconds)</label>
-          <input type="number" value="${cfg.mist.onSec}" style="width:100%; margin-top:4px;" onchange="cfg.mist.onSec=+this.value;">
-        </div>
-        <div>
-          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Wait Cooldown Hysteresis (Seconds)</label>
-          <input type="number" value="${cfg.mist.waitSec}" style="width:100%; margin-top:4px;" onchange="cfg.mist.waitSec=+this.value;">
-        </div>
-        <div>
-          <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Max Continuous Run (Minutes)</label>
-          <input type="number" value="${cfg.mist.maxMin}" style="width:100%; margin-top:4px;" onchange="cfg.mist.maxMin=+this.value;">
-        </div>
-      </div>
+      const sitesRef = useRef(sites);
+      const eventsRef = useRef(events);
+      const cfgRef = useRef(cfg);
 
-      <div style="margin-top: 24px; display:flex; justify-content:flex-end;">
-        <button class="b" onclick="alert('Configuration synchronized with all active ESP32 edge nodes.')">Commit Global Parameters</button>
-      </div>
-    </div>
-  `;
-}
+      useEffect(() => { sitesRef.current = sites; }, [sites]);
+      useEffect(() => { eventsRef.current = events; }, [events]);
+      useEffect(() => { cfgRef.current = cfg; }, [cfg]);
 
-function renderWaterChart(site) {
-  const labels = ['6d ago', '5d ago', '4d ago', '3d ago', '2d ago', 'Yesterday', 'Today'];
-  const fixedDailyTimerLitres = Math.round((cfg.baselineTimer.workHours * 60 / cfg.baselineTimer.intervalMin) * cfg.baselineTimer.onSec * cfg.flowRateLps);
-  const sensorData = [...site.waterLog, Math.round(site.litresToday)];
-  const baselineData = Array(7).fill(fixedDailyTimerLitres);
+      useEffect(() => {
+        const setup = async () => {
+          const { db, ref, onValue } = window.FirebaseAPI;
 
-  const maxVal = Math.max(...sensorData, ...baselineData, 100);
-  const totalSensor = sensorData.reduce((a, b) => a + b, 0);
-  const totalBaseline = baselineData.reduce((a, b) => a + b, 0);
-  const waterSaved = totalBaseline - totalSensor;
-  const percentSaved = Math.round((waterSaved / totalBaseline) * 100);
+          onValue(ref(db, 'buildwatch/sites'), (s) => {
+            if (s.exists()) {
+              const data = s.val();
+              const sitesArray = Object.keys(data).map(k => {
+                let obj = { id: k, ...data[k] };
+                
+                // Forces coordinates to match the Flutter app's internal clustering logic
+                let sx = 3.2065;
+                let sy = 101.4945;
+                if (k === 'site-a') { sx += 0.0020; sy += 0.0005; }
+                else if (k === 'site-b') { sx -= 0.0010; sy -= 0.0010; }
+                else if (k === 'site-c') { sx -= 0.0025; sy += 0.0020; }
+                
+                if (!obj.live) obj.live = {};
+                obj.live.lat = sx;
+                obj.live.lng = sy;
+                return obj;
+              });
+              setSites(sitesArray);
+            }
+          });
+          onValue(ref(db, 'buildwatch/events'), (s) => {
+            if (s.exists()) {
+              const data = s.val();
+              setEvents(Object.keys(data).map(k => data[k]));
+            }
+          });
+          onValue(ref(db, 'buildwatch/cfg'), (s) => {
+            if (s.exists()) setCfg(s.val());
+          });
+          setIsLoaded(true);
+        };
 
-  return `
-    <svg viewBox="0 0 360 170" width="100%" style="overflow: visible;">
-      ${sensorData.map((val, i) => {
-        const x = 12 + i * 50;
-        const hBase = (baselineData[i] / maxVal) * 115;
-        const hSens = (val / maxVal) * 115;
-        return `
-          <rect x="${x}" y="${130 - hBase}" width="18" height="${hBase}" fill="var(--border)" rx="2"/>
-          <rect x="${x + 20}" y="${130 - hSens}" width="18" height="${hSens}" fill="var(--accent)" rx="2"/>
-          <text x="${x + 19}" y="148" font-size="11" text-anchor="middle" fill="currentColor">${labels[i]}</text>
-        `;
-      }).join('')}
-    </svg>
-    <div class="row" style="margin-top: 4px; font-size: 13px;">
-      <span style="display:inline-block; width:12px; height:12px; background:var(--accent); border-radius:2px;"></span> Sensor Triggered
-      <span style="display:inline-block; width:12px; height:12px; background:var(--border); border-radius:2px; margin-left: 10px;"></span> Fixed Baseline (${fixedDailyTimerLitres} L/day)
-    </div>
-    <div style="margin-top: 8px; font-size: 14px;">
-      Cumulative 7-Day Conservation: <b style="color:var(--green)">${waterSaved} Litres saved (${percentSaved}% reduction)</b>
-    </div>
-  `;
-}
+        if (window.FirebaseAPI) setup();
+        else window.addEventListener('firebase-ready', setup);
+        return () => window.removeEventListener('firebase-ready', setup);
+      }, []);
 
-function setMistingMode(siteId, mode) {
-  const s = SITES.find(x => x.id === siteId);
-  s.mode = mode;
-  if (mode === 'auto' && s.pump) {
-    stopMisting(s, 'Switched to Auto Mode');
-  }
-  renderView();
-}
+      // TELEMETRY LIVE FLUCTUATION ENGINE & COMPLIANCE CHECKER
+      useEffect(() => {
+        if (!isLoaded || !window.FirebaseAPI) return;
+        
+        const interval = setInterval(() => {
+          const currentSites = sitesRef.current;
+          const currentEvents = eventsRef.current;
+          const currentCfg = cfgRef.current;
+          if (!currentSites.length) return;
 
-function toggleManualPump(siteId) {
-  const s = SITES.find(x => x.id === siteId);
-  if (s.pump) {
-    stopMisting(s, 'Manual operator shutoff');
-  } else {
-    startMisting(s, 'Manual operator actuation');
-  }
-  renderView();
-}
+          let updates = {};
+          let nextEvents = [...currentEvents];
+          let eventsChanged = false;
+          const now = clock();
+          
+          currentSites.forEach(s => {
+            const sCopy = JSON.parse(JSON.stringify(s));
+            
+            let newDust = Math.max(12, Math.round((sCopy.live?.dust || 30) + (Math.random() * 4 - 2)));
+            let newNoise = Math.max(45, Math.min(95, Math.round((sCopy.live?.noise || 50) + (Math.random() * 4 - 2))));
+            let isPumpOn = sCopy.live?.pump || false;
 
-function logSupervisorAction(actionText) {
-  const s = curSite();
-  dbEvents.unshift({
-    id: 'EV-' + Math.floor(100 + Math.random() * 900),
-    siteId: s.id,
-    time: Date.now(),
-    type: 'Supervisor Mitigation',
-    before: `Dust: ${s.dust} µg/m³ | Noise: ${s.noise} dB(A)`,
-    action: actionText,
-    after: 'Monitoring recovery window',
-    litres: s.pump ? 15 : 0,
-    outcome: 'Action Logged'
-  });
-  alert(`Action registered to site log: "${actionText}"`);
-  renderView();
-}
+            if (isPumpOn) {
+               newDust = Math.max(15, Math.round(newDust * 0.85));
+            }
 
-function addTask() {
-  const input = $('#new-task-input');
-  if (input && input.value.trim()) {
-    curSite().tasks.push({ t: input.value.trim(), done: false });
-    renderView();
-  }
-}
+            let anyMistNeeded = false;
 
-function exportIncidentsCSV() {
-  const headers = ['Event ID', 'Timestamp', 'Site', 'Type', 'Before Reading', 'Action Taken', 'Post Reading', 'Litres Used', 'Audit Outcome'];
-  const rows = dbEvents.map(e => [
-    e.id,
-    new Date(e.time).toISOString(),
-    e.siteId,
-    e.type,
-    `"${e.before}"`,
-    `"${e.action}"`,
-    `"${e.after || ''}"`,
-    e.litres,
-    `"${e.outcome}"`
-  ]);
+            (sCopy.areas || []).forEach((a, index) => {
+               if (a.id === 1) {
+                  a.pm25 = newDust;
+                  a.db = newNoise;
+               } else {
+                  a.pm25 = Math.max(10, Math.round(a.pm25 + (Math.random() * 4 - 2)));
+                  a.db = Math.max(40, Math.min(90, Math.round(a.db + (Math.random() * 4 - 2))));
+               }
 
-  const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement('a');
-  link.setAttribute('href', encodedUri);
-  link.setAttribute('download', `buildwatch_compliance_${Date.now()}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
+               const ck = check(sCopy, a, currentCfg, now);
+               
+               [["noise", ck.noiseBreach, a.db, ck.noiseLimit, ck.noiseLvl], 
+                ["dust", ck.dustBreach, a.pm25, ck.dustLimit, ck.dustLvl]].forEach(([kind, bad, val, limit, level]) => {
+                 
+                 const open = nextEvents.find((e) => e.siteId === sCopy.id && e.area === a.id && e.kind === kind && !e.end);
+                 
+                 if (bad && !open) {
+                   nextEvents.unshift({ id: `EV-${Date.now().toString().slice(-5)}${Math.floor(Math.random()*10)}`, siteId: sCopy.id, area: a.id, kind, start: now, end: null, level, limit, peak: val, action: "", actionAt: null });
+                   eventsChanged = true;
+                 } else if (bad && open && val > open.peak) {
+                   open.peak = val; open.limit = limit; open.level = level;
+                   eventsChanged = true;
+                 } else if (!bad && open) {
+                   open.end = now;
+                   eventsChanged = true;
+                 }
+               });
 
-// Initialise Application
-mountLogin();
-setInterval(telemetryEdgeLoop, 2000);
-</script>
+               const mist = a.mist ? a.pm25 > ck.dustTarget : a.pm25 > ck.dustLimit;
+               if (mist !== !!a.mist) {
+                 a.mist = mist;
+                 if (mist) a.pre = a.pm25;
+               }
+               if (mist) anyMistNeeded = true;
+
+               updates[`buildwatch/sites/${s.id}/areas/${index}/pm25`] = a.pm25;
+               updates[`buildwatch/sites/${s.id}/areas/${index}/db`] = a.db;
+               updates[`buildwatch/sites/${s.id}/areas/${index}/mist`] = a.mist;
+               if (a.mist) updates[`buildwatch/sites/${s.id}/areas/${index}/pre`] = a.pre;
+            });
+
+            isPumpOn = anyMistNeeded;
+
+            updates[`buildwatch/sites/${s.id}/live/dust`] = newDust;
+            updates[`buildwatch/sites/${s.id}/live/noise`] = newNoise;
+            updates[`buildwatch/sites/${s.id}/live/pump`] = isPumpOn;
+          });
+
+          if (Object.keys(updates).length > 0) {
+            window.FirebaseAPI.update(window.FirebaseAPI.ref(window.FirebaseAPI.db), updates);
+          }
+
+          if (eventsChanged) {
+            const eventsObj = nextEvents.reduce((acc, e) => ({...acc, [e.id]: e}), {});
+            window.FirebaseAPI.set(window.FirebaseAPI.ref(window.FirebaseAPI.db, 'buildwatch/events'), eventsObj);
+          }
+        }, 3000); 
+
+        return () => clearInterval(interval);
+      }, [isLoaded]);
+
+      const isAdmin = session?.role === "admin";
+      const visible = useMemo(() => (isAdmin ? sites : sites.filter((s) => s.id === session?.siteId)), [isAdmin, sites, session]);
+      const visibleEvents = events.filter((e) => visible.some((s) => s.id === e.siteId));
+
+      const go = (page, siteId = null) => setView({ page, siteId });
+      const login = (s) => { setSession(s); go("overview"); };
+
+      const setAction = (eventId, action) => {
+        if (!window.FirebaseAPI) return;
+        const nextEvents = events.map((e) => (e.id === eventId ? { ...e, action, actionAt: action ? clock() : null } : e));
+        const eventsObj = nextEvents.reduce((acc, e) => ({...acc, [e.id]: e}), {});
+        window.FirebaseAPI.set(window.FirebaseAPI.ref(window.FirebaseAPI.db, 'buildwatch/events'), eventsObj);
+      };
+
+      const handleSetCfg = (newCfg) => {
+        if (!window.FirebaseAPI) return;
+        window.FirebaseAPI.set(window.FirebaseAPI.ref(window.FirebaseAPI.db, 'buildwatch/cfg'), newCfg);
+      };
+      
+      const handleSaveSiteConfig = (siteId, newConfig) => {
+        if (!window.FirebaseAPI) return;
+        window.FirebaseAPI.set(window.FirebaseAPI.ref(window.FirebaseAPI.db, `buildwatch/sites/${siteId}/config`), newConfig);
+      };
+
+      if (!isLoaded) {
+        return (
+          <div className="flex min-h-screen items-center justify-center bg-orange-50 text-sm font-semibold uppercase tracking-wider text-orange-600">
+            <Icon name="Database" className="mr-2 animate-pulse" /> Connecting to Firebase...
+          </div>
+        );
+      }
+
+      if (!session) return <LoginPage sites={sites} onLogin={login} />;
+
+      const current = visible.find((s) => s.id === view.siteId);
+      const nav = [
+        ["overview", "Overview", "LayoutDashboard"],
+        ["site", "Site Details", "Building2"],
+        ["log", "Incident Audit Log", "ClipboardList"],
+        ...(isAdmin ? [
+          ["schedule", "Manage Schedules", "CalendarDays"],
+          ["config", "Threshold Config", "SlidersHorizontal"]
+        ] : [])
+      ];
+
+      return (
+        <CfgCtx.Provider value={cfg}>
+          <div className="min-h-screen bg-orange-50 text-slate-900">
+            <header className="sticky top-0 border-b border-orange-100 bg-white" style={{ zIndex: 1000 }}>
+              <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3">
+                <div className="flex items-center gap-3 font-bold text-lg">
+                  <img src={LOGO_URL} alt="BuildWatch Logo" className="h-8 w-auto object-contain rounded-md shadow-sm" />
+                  BuildWatch
+                </div>
+                <nav className="flex flex-1 gap-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                  {nav.map(([k, label, iconName]) => {
+                    const on = view.page === k;
+                    return (
+                      <button 
+                        key={k} 
+                        onClick={() => (k === "site" ? go("site", view.siteId || visible[0]?.id) : go(k))} 
+                        className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap transition ${on ? "bg-orange-500 text-white" : "text-slate-600 hover:bg-orange-50"}`}
+                      >
+                        <Icon name={iconName} size={15} /> <span className="hidden lg:inline">{label}</span>
+                      </button>
+                    );
+                  })}
+                </nav>
+                <span className="rounded-md bg-orange-100 px-2 py-1 text-xs font-bold uppercase text-orange-700 hidden sm:inline">{isAdmin ? "Administrator" : "Site Manager"}</span>
+                <button onClick={() => setSession(null)} className="flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-orange-600 transition">
+                  <Icon name="LogOut" size={16} /> Sign out
+                </button>
+              </div>
+            </header>
+
+            <main className="mx-auto max-w-6xl p-5">
+              {view.page === "site" && current ? <SiteDetail key={current.id} site={current} sites={visible} onSelect={(id) => go("site", id)} events={events} onAction={setAction} />
+                : view.page === "log" ? <IncidentLog events={visibleEvents} sites={sites} />
+                : view.page === "config" && isAdmin ? <ConfigPage cfg={cfg} setCfg={handleSetCfg} />
+                : view.page === "schedule" && isAdmin ? <ScheduleManager sites={sites} onSaveSiteConfig={handleSaveSiteConfig} />
+                : <OverviewPage sites={visible} onOpen={(id) => go("site", id)} />}
+            </main>
+          </div>
+        </CfgCtx.Provider>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+
+  <!-- FIREBASE INTEGRATION MODULE -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    import { getDatabase, ref, get, set, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAK-e-uORTohnpfvFM0CERKos_4mq8E8rw",
+      authDomain: "buildwatch-6040a.firebaseapp.com",
+      databaseURL: "https://buildwatch-6040a-default-rtdb.firebaseio.com",
+      projectId: "buildwatch-6040a",
+      storageBucket: "buildwatch-6040a.firebasestorage.app",
+      messagingSenderId: "919361982067",
+      appId: "1:919361982067:web:7f5840906f47cdcb7d6406",
+      measurementId: "G-D7S6T81SVS"
+    };
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      const db = getDatabase(app);
+      window.FirebaseAPI = { db, ref, get, set, update, onValue };
+      window.dispatchEvent(new Event('firebase-ready'));
+    } catch (err) {
+      console.error("Firebase init failed:", err);
+    }
+  </script>
 </body>
 </html>
