@@ -52,7 +52,6 @@
     /* ------------------------------------------------------------------ *
      *  ENVIRONMENT CONFIG & HELPER MATH
      * ------------------------------------------------------------------ */
-    // Updated Center to perfectly match the Flutter App's Elmina Green anchor
     const CENTER = [3.2065, 101.4945];
     const ACTIONS = [
       "Contractor instructed to pause heavy machinery",
@@ -102,6 +101,18 @@
     const workState = (w, now = clock()) => (w.end <= now ? "done" : w.start <= now ? "active" : "upcoming");
     const fmt = (ms) => new Date(ms).toLocaleTimeString("en-MY", { hour: "2-digit", minute: "2-digit", hour12: true });
 
+    // Maps the ESP32 Live Telemetry dynamically to "Area 1" for UI display without needing the randomizer
+    const getAreas = (site) => {
+      const list = site.areas && site.areas.length > 0 ? site.areas : [{ id: 1 }];
+      return list.map(a => ({
+        ...a,
+        pm25: a.id === 1 ? (site.live?.dust || 0) : (a.pm25 || 0),
+        pm10: a.id === 1 ? Math.round((site.live?.dust || 0) * 1.2) : (a.pm10 || 0),
+        db: a.id === 1 ? (site.live?.noise || 0) : (a.db || 0),
+        mist: a.id === 1 ? !!site.live?.pump : !!a.mist
+      }));
+    };
+
     const check = (site, a, c, now = clock()) => {
       const works = (site.config?.schDetailed || []).filter((w) => w.area === a.id && workState(w, now) === "active");
       const noiseLvl = maxLvl(works.map((w) => w.noise));
@@ -113,10 +124,10 @@
       return { works, noiseLvl, dustLvl, noiseLimit, dustLimit, dustTarget, noiseBreach, dustBreach, mist, status: noiseBreach ? "red" : dustBreach || mist ? "amber" : "green" };
     };
 
-    const siteStatus = (s, c) => (s.areas || []).map((a) => check(s, a, c).status).reduce((w, x) => (RANK[x] > RANK[w] ? x : w), "green");
+    const siteStatus = (s, c) => getAreas(s).map((a) => check(s, a, c).status).reduce((w, x) => (RANK[x] > RANK[w] ? x : w), "green");
     const peakOf = (s) => ({
-      n: (s.areas || []).reduce((m, a) => (a.db > m.db ? a : m), { db: 0, id: 1 }),
-      d: (s.areas || []).reduce((m, a) => (a.pm25 > m.pm25 ? a : m), { pm25: 0, pm10: 0, id: 1 }),
+      n: getAreas(s).reduce((m, a) => (a.db > m.db ? a : m), { db: 0, id: 1 }),
+      d: getAreas(s).reduce((m, a) => (a.pm25 > m.pm25 ? a : m), { pm25: 0, pm10: 0, id: 1 }),
     });
 
     const CfgCtx = createContext(DEFAULT_CFG);
@@ -235,7 +246,6 @@
 
       useEffect(() => {
         if (!window.L || map.current) return;
-        // Zoomed in closer (15) to match the Flutter app view
         map.current = window.L.map(el.current).setView(CENTER, 15);
         window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map.current);
         return () => { map.current?.remove(); map.current = null; markers.current = {}; };
@@ -250,7 +260,6 @@
           const tip = `<b>${s.live.name}</b><br/>${STATUS[st].label}`;
           
           if (markers.current[s.id]) {
-            // Actively snaps pins into place if coordinates change
             markers.current[s.id]
               .setLatLng([s.live.lat, s.live.lng])
               .setIcon(icon)
@@ -327,7 +336,7 @@
       const c = useCfg();
       const ck = check(site, a, c);
       const mist = ck.mist;
-      const cut = mist ? Math.max(0, Math.round((1 - a.pm25 / a.pre) * 100)) : 0;
+      const cut = mist && a.pre ? Math.max(0, Math.round((1 - a.pm25 / a.pre) * 100)) : 0;
       const verdict = (bad) => (
         <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${bad ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}`}>
           {bad ? "Breached" : "Within limit"}
@@ -384,20 +393,20 @@
                 <div className="text-xs font-semibold uppercase text-slate-500">Automated Mitigation</div>
                 <div className="mt-1 flex items-center gap-2 font-medium">
                   <span className={`h-2.5 w-2.5 rounded-full ${mist ? "animate-pulse bg-sky-500" : "bg-slate-400"}`} />
-                  Automatic Water Misting: {mist ? `Active – runs until PM2.5 ≤ ${ck.dustTarget} µg/m³` : "Standby"}
+                  Water Misting: {mist ? `Active (PM2.5 Threshold Target: ≤ ${ck.dustTarget} µg/m³)` : "Standby"}
                 </div>
               </div>
               <div className="mt-4">
                 <div className="text-xs font-semibold uppercase text-slate-500">Post-Mitigation Impact</div>
                 {mist ? (
                   <>
-                    {[["Before misting", a.pre, "bg-red-500"], ["After misting", a.pm25, "bg-green-500"]].map(([l, v, col]) => (
+                    {[["Before misting", a.pre || "Unknown", "bg-red-500"], ["Current", a.pm25, "bg-green-500"]].map(([l, v, col]) => (
                       <div key={l} className="mt-2">
                         <div className="flex justify-between text-xs"><span>{l}</span><span className="tabular-nums">{v} µg/m³</span></div>
-                        <div className="mt-1 h-2.5 rounded-full bg-orange-50"><div className={`h-full rounded-full ${col}`} style={{ width: `${Math.min(100, (v / a.pre) * 100)}%` }} /></div>
+                        <div className="mt-1 h-2.5 rounded-full bg-orange-50"><div className={`h-full rounded-full ${col}`} style={{ width: `${Math.min(100, (v / (a.pre||100)) * 100)}%` }} /></div>
                       </div>
                     ))}
-                    <div className="mt-2 text-sm font-semibold text-green-700">Dust suppressed by {cut}% after misting</div>
+                    <div className="mt-2 text-sm font-semibold text-green-700">Dust suppression active</div>
                     <div className="text-xs text-slate-500">Misting stops at ≤ {ck.dustTarget} µg/m³ (threshold {ck.dustLimit}, minus {c.mistMargin}%)</div>
                   </>
                 ) : <div className="mt-1 text-sm text-slate-500">No misting needed – within expected limits.</div>}
@@ -467,7 +476,7 @@
                 {ticks.map((t) => <span key={t} className="absolute -translate-x-1/2 text-[11px] font-medium text-slate-400" style={{ left: `${pos(t)}%` }}>{hr(t)}</span>)}
               </div>
             </div>
-            {(site.areas || []).map((a) => {
+            {getAreas(site).map((a) => {
               const ends = [];
               const placed = ws.filter((w) => w.area === a.id).sort((x, y) => x.start - y.start).map((w) => {
                 let i = ends.findIndex((e) => e <= w.start); if (i < 0) i = ends.length; ends[i] = w.end; return [w, i];
@@ -549,7 +558,7 @@
                   </thead>
                   <tbody className="divide-y divide-orange-100">
                     {sorted.map((w) => {
-                      const st = workState(w, now), a = (site.areas || []).find((x) => x.id === w.area), ck = a ? check(site, a, c, now) : { noiseBreach: false, dustBreach: false };
+                      const st = workState(w, now), a = getAreas(site).find((x) => x.id === w.area), ck = a ? check(site, a, c, now) : { noiseBreach: false, dustBreach: false };
                       const taskName = w.type === "Others" && w.customType ? w.customType : w.type;
                       const chips = [];
                       
@@ -618,7 +627,7 @@
       );
     }
 
-    function SiteDetail({ site, sites, onSelect, events, onAction }) {
+    function SiteDetail({ site, sites, onSelect, events, onAction, onModeToggle, onPumpToggle }) {
       const c = useCfg();
       const [openId, setOpenId] = useState(null);
       const panel = useRef(null);
@@ -626,13 +635,16 @@
       
       const { n, d } = peakOf(site);
       const cn = check(site, n, c), cd = check(site, d, c);
-      const selected = (site.areas || []).find((a) => a.id === openId);
+      const selected = getAreas(site).find((a) => a.id === openId);
       const ev = selected && events.find((e) => e.siteId === site.id && e.area === selected.id && e.kind === "noise" && !e.end);
+
+      const mode = site.config?.mode || 'auto';
+      const pump = site.live?.pump || false;
 
       return (
         <div className="space-y-6">
           {sites.length > 1 && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="text-xs font-semibold uppercase text-slate-500">Select site</span>
               {sites.map((x) => (
                 <button key={x.id} onClick={() => onSelect(x.id)}
@@ -642,7 +654,8 @@
               ))}
             </div>
           )}
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
             <div>
               <h1 className="text-2xl font-bold">{site.live?.name}</h1>
               <div className="flex items-center gap-1 text-sm text-slate-500"><Icon name="MapPin" size={13} /> {site.live?.type}</div>
@@ -650,15 +663,46 @@
             <StatusPill status={siteStatus(site, c)} />
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* METERS MOVED TO TOP */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-6">
             <Meter iconName="Volume2" label="Noise" value={n.db} unit="dB(A)" limit={cn.noiseLimit} sub="Peak across all floors" caption={`Source: Area ${n.id} · expected ${LVL[cn.noiseLvl].label}`} />
             <Meter iconName="Wind" label="Dust PM2.5 / PM10" value={d.pm25} unit="µg/m³" limit={cd.dustLimit} sub={`PM10: ${d.pm10} µg/m³`} caption={`Source: Area ${d.id} · expected ${LVL[cd.dustLvl].label}`} />
           </div>
 
+          {/* ACTUATOR CONTROL MOVED BELOW METERS */}
+          <section className="mb-6">
+            <h2 className="mb-2 text-lg font-bold">Actuator Control (Mist Pump)</h2>
+            <div className={`${card} p-5 flex flex-wrap gap-4 items-center justify-between`}>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Mode</span>
+                  <div className="flex rounded-lg bg-orange-100 p-1">
+                    <button onClick={() => onModeToggle(site.id, 'auto')} className={`px-3 py-1.5 text-sm font-bold rounded-md transition ${mode === 'auto' ? 'bg-white shadow text-orange-700' : 'text-slate-500 hover:text-slate-700'}`}>Auto</button>
+                    <button onClick={() => onModeToggle(site.id, 'manual')} className={`px-3 py-1.5 text-sm font-bold rounded-md transition ${mode === 'manual' ? 'bg-white shadow text-orange-700' : 'text-slate-500 hover:text-slate-700'}`}>Manual</button>
+                  </div>
+                </div>
+                {mode === 'manual' && (
+                  <div className="flex items-center gap-3 border-l border-orange-200 pl-4">
+                    <span className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Pump Power</span>
+                    <button onClick={() => onPumpToggle(site.id, !pump)} className={`px-4 py-1.5 text-sm font-bold rounded-lg text-white shadow-sm transition ${pump ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}>
+                      {pump ? 'Turn OFF' : 'Turn ON'}
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="text-sm text-slate-500">
+                {mode === 'auto' 
+                  ? <span>Managed automatically by sensor thresholds. Currently: <strong className={pump ? 'text-sky-600' : 'text-slate-600'}>{pump ? 'ACTIVE' : 'STANDBY'}</strong></span>
+                  : <span>Manual override enabled. ESP32 will follow web commands. Current Status: <strong className={pump ? 'text-sky-600' : 'text-slate-600'}>{pump ? 'ACTIVE' : 'STANDBY'}</strong></span>
+                }
+              </div>
+            </div>
+          </section>
+
           <section>
             <h2 className="mb-2 text-lg font-bold">Areas &amp; Zone Status</h2>
             <div className={`${card} divide-y divide-orange-100 overflow-hidden`}>
-              {(site.areas || []).map((a) => {
+              {getAreas(site).map((a) => {
                 const ck = check(site, a, c), S = STATUS[ck.status], on = openId === a.id;
                 const sub = ck.noiseBreach ? `Noise breach · ${a.db} dB (limit ${ck.noiseLimit})` : ck.dustBreach ? `Dust breach · misting active (limit ${ck.dustLimit})` : ck.mist ? `Misting until PM2.5 ≤ ${ck.dustTarget} µg/m³` : "Within limits";
                 return (
@@ -1068,95 +1112,6 @@
         return () => window.removeEventListener('firebase-ready', setup);
       }, []);
 
-      // TELEMETRY LIVE FLUCTUATION ENGINE & COMPLIANCE CHECKER
-      useEffect(() => {
-        if (!isLoaded || !window.FirebaseAPI) return;
-        
-        const interval = setInterval(() => {
-          const currentSites = sitesRef.current;
-          const currentEvents = eventsRef.current;
-          const currentCfg = cfgRef.current;
-          if (!currentSites.length) return;
-
-          let updates = {};
-          let nextEvents = [...currentEvents];
-          let eventsChanged = false;
-          const now = clock();
-          
-          currentSites.forEach(s => {
-            const sCopy = JSON.parse(JSON.stringify(s));
-            
-            let newDust = Math.max(12, Math.round((sCopy.live?.dust || 30) + (Math.random() * 4 - 2)));
-            let newNoise = Math.max(45, Math.min(95, Math.round((sCopy.live?.noise || 50) + (Math.random() * 4 - 2))));
-            let isPumpOn = sCopy.live?.pump || false;
-
-            if (isPumpOn) {
-               newDust = Math.max(15, Math.round(newDust * 0.85));
-            }
-
-            let anyMistNeeded = false;
-
-            (sCopy.areas || []).forEach((a, index) => {
-               if (a.id === 1) {
-                  a.pm25 = newDust;
-                  a.db = newNoise;
-               } else {
-                  a.pm25 = Math.max(10, Math.round(a.pm25 + (Math.random() * 4 - 2)));
-                  a.db = Math.max(40, Math.min(90, Math.round(a.db + (Math.random() * 4 - 2))));
-               }
-
-               const ck = check(sCopy, a, currentCfg, now);
-               
-               [["noise", ck.noiseBreach, a.db, ck.noiseLimit, ck.noiseLvl], 
-                ["dust", ck.dustBreach, a.pm25, ck.dustLimit, ck.dustLvl]].forEach(([kind, bad, val, limit, level]) => {
-                 
-                 const open = nextEvents.find((e) => e.siteId === sCopy.id && e.area === a.id && e.kind === kind && !e.end);
-                 
-                 if (bad && !open) {
-                   nextEvents.unshift({ id: `EV-${Date.now().toString().slice(-5)}${Math.floor(Math.random()*10)}`, siteId: sCopy.id, area: a.id, kind, start: now, end: null, level, limit, peak: val, action: "", actionAt: null });
-                   eventsChanged = true;
-                 } else if (bad && open && val > open.peak) {
-                   open.peak = val; open.limit = limit; open.level = level;
-                   eventsChanged = true;
-                 } else if (!bad && open) {
-                   open.end = now;
-                   eventsChanged = true;
-                 }
-               });
-
-               const mist = a.mist ? a.pm25 > ck.dustTarget : a.pm25 > ck.dustLimit;
-               if (mist !== !!a.mist) {
-                 a.mist = mist;
-                 if (mist) a.pre = a.pm25;
-               }
-               if (mist) anyMistNeeded = true;
-
-               updates[`buildwatch/sites/${s.id}/areas/${index}/pm25`] = a.pm25;
-               updates[`buildwatch/sites/${s.id}/areas/${index}/db`] = a.db;
-               updates[`buildwatch/sites/${s.id}/areas/${index}/mist`] = a.mist;
-               if (a.mist) updates[`buildwatch/sites/${s.id}/areas/${index}/pre`] = a.pre;
-            });
-
-            isPumpOn = anyMistNeeded;
-
-            updates[`buildwatch/sites/${s.id}/live/dust`] = newDust;
-            updates[`buildwatch/sites/${s.id}/live/noise`] = newNoise;
-            updates[`buildwatch/sites/${s.id}/live/pump`] = isPumpOn;
-          });
-
-          if (Object.keys(updates).length > 0) {
-            window.FirebaseAPI.update(window.FirebaseAPI.ref(window.FirebaseAPI.db), updates);
-          }
-
-          if (eventsChanged) {
-            const eventsObj = nextEvents.reduce((acc, e) => ({...acc, [e.id]: e}), {});
-            window.FirebaseAPI.set(window.FirebaseAPI.ref(window.FirebaseAPI.db, 'buildwatch/events'), eventsObj);
-          }
-        }, 3000); 
-
-        return () => clearInterval(interval);
-      }, [isLoaded]);
-
       const isAdmin = session?.role === "admin";
       const visible = useMemo(() => (isAdmin ? sites : sites.filter((s) => s.id === session?.siteId)), [isAdmin, sites, session]);
       const visibleEvents = events.filter((e) => visible.some((s) => s.id === e.siteId));
@@ -1179,6 +1134,16 @@
       const handleSaveSiteConfig = (siteId, newConfig) => {
         if (!window.FirebaseAPI) return;
         window.FirebaseAPI.set(window.FirebaseAPI.ref(window.FirebaseAPI.db, `buildwatch/sites/${siteId}/config`), newConfig);
+      };
+
+      const handleModeToggle = (siteId, mode) => {
+        if (!window.FirebaseAPI) return;
+        window.FirebaseAPI.set(window.FirebaseAPI.ref(window.FirebaseAPI.db, `buildwatch/sites/${siteId}/config/mode`), mode);
+      };
+
+      const handlePumpToggle = (siteId, state) => {
+        if (!window.FirebaseAPI) return;
+        window.FirebaseAPI.set(window.FirebaseAPI.ref(window.FirebaseAPI.db, `buildwatch/sites/${siteId}/live/pump`), state);
       };
 
       if (!isLoaded) {
@@ -1233,7 +1198,7 @@
             </header>
 
             <main className="mx-auto max-w-6xl p-5">
-              {view.page === "site" && current ? <SiteDetail key={current.id} site={current} sites={visible} onSelect={(id) => go("site", id)} events={events} onAction={setAction} />
+              {view.page === "site" && current ? <SiteDetail key={current.id} site={current} sites={visible} onSelect={(id) => go("site", id)} events={events} onAction={setAction} onModeToggle={handleModeToggle} onPumpToggle={handlePumpToggle} />
                 : view.page === "log" ? <IncidentLog events={visibleEvents} sites={sites} />
                 : view.page === "config" && isAdmin ? <ConfigPage cfg={cfg} setCfg={handleSetCfg} />
                 : view.page === "schedule" && isAdmin ? <ScheduleManager sites={sites} onSaveSiteConfig={handleSaveSiteConfig} />
