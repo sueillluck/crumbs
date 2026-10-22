@@ -68,12 +68,30 @@
     ];
 
     const DEFAULT_CFG = {
-      mistMargin: 10,
+      mistMargin: 10,                       // Reduction Below Threshold (%)
+      ceiling: { noise: 85, dust: 150 },    // absolute breach ceilings
       levels: {
-        light: { noise: 65, dust: 25 },
-        moderate: { noise: 75, dust: 45 },
-        heavy: { noise: 85, dust: 70 },
+        light: { noise: 65, dust: 35 },
+        moderate: { noise: 78, dust: 75 },
+        heavy: { noise: 85, dust: 150 },    // heavy = anything above moderate, up to the ceiling
       },
+    };
+    // Accepts any saved cfg (incl. the old shape) and returns a complete, consistent one.
+    const normalizeCfg = (v) => {
+      const d = DEFAULT_CFG;
+      if (!v || !v.ceiling) return JSON.parse(JSON.stringify(d)); // legacy / missing -> new defaults
+      const n = (x, f) => (x !== null && x !== undefined && x !== "" && Number.isFinite(Number(x)) ? Number(x) : f);
+      const out = { mistMargin: n(v.mistMargin, d.mistMargin), ceiling: { noise: n(v.ceiling.noise, d.ceiling.noise), dust: n(v.ceiling.dust, d.ceiling.dust) }, levels: {} };
+      ["light", "moderate"].forEach((l) => { out.levels[l] = { noise: n(v.levels?.[l]?.noise, d.levels[l].noise), dust: n(v.levels?.[l]?.dust, d.levels[l].dust) }; });
+      out.levels.heavy = { noise: out.ceiling.noise, dust: out.ceiling.dust };
+      return out;
+    };
+
+    const FALLBACK_COORDS = { "site-a": [3.2085, 101.4950], "site-b": [3.2055, 101.4935], "site-c": [3.2040, 101.4965] };
+    const DEMO_SITES = {
+      "site-a": { live: { name: "Site A", type: "Residential Tower", noise: 62, dust: 28, pump: false }, config: { mode: "auto" } },
+      "site-b": { live: { name: "Site B", type: "Commercial Block", noise: 62, dust: 32, pump: false }, config: { mode: "auto" } },
+      "site-c": { live: { name: "Site C", type: "Infrastructure Works", noise: 58, dust: 30, pump: false }, config: { mode: "auto" } },
     };
 
     const DAY0 = new Date(); DAY0.setHours(0, 0, 0, 0);
@@ -81,8 +99,43 @@
     const tm = (t) => { const [h, m] = t.split(":").map(Number); return at(h, m); };
     const toTimeStr = (ms) => { const d = new Date(ms); return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`; };
     
-    const CLOCK_OFFSET = (() => { const h = new Date().getHours(); return h >= 8 && h < 18 ? 0 : at(10, 30) - Date.now(); })();
-    const clock = () => Date.now() + CLOCK_OFFSET;
+    const clock = () => Date.now(); // real current time
+
+    // Default demo schedule, used only when Firebase has no saved schedule for a site.
+    // Default schedules per site
+const demoSchedule = (siteId) => {
+  if (siteId === "site-a") {
+    return [
+      { id: `demo_${siteId}_1`, area: 1, start: tm("09:00"), end: tm("12:00"), type: "Roof Truss Works", customType: "", noise: "moderate", dust: "moderate" },
+      { id: `demo_${siteId}_2`, area: 1, start: tm("13:00"), end: tm("17:00"), type: "Plastering", customType: "", noise: "light", dust: "light" }
+    ];
+  } else if (siteId === "site-b") {
+    return [
+      { id: `demo_${siteId}_1`, area: 1, start: tm("09:00"), end: tm("12:00"), type: "Floor Tile Hacking", customType: "", noise: "heavy", dust: "heavy" },
+      { id: `demo_${siteId}_2`, area: 1, start: tm("13:00"), end: tm("17:00"), type: "Wiring & Plaster Ceiling", customType: "", noise: "light", dust: "moderate" }
+    ];
+  } else if (siteId === "site-c") {
+    return [
+      { id: `demo_${siteId}_1`, area: 1, start: tm("09:00"), end: tm("12:00"), type: "Wall Hacking & Demolition", customType: "", noise: "heavy", dust: "heavy" },
+      { id: `demo_${siteId}_2`, area: 1, start: tm("13:00"), end: tm("17:00"), type: "Tile Laying & Painting", customType: "", noise: "light", dust: "moderate" }
+    ];
+  }
+  return [];
+};
+    const rebase = (ms) => { const d = new Date(Number(ms)); return Number.isFinite(d.getTime()) ? at(d.getHours(), d.getMinutes()) : null; };
+    // Returns the schedule to display: the saved one (re-dated to today) or the demo one. Never written back unless the admin publishes.
+    const normSchedule = (siteId, raw) => {
+      const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : [];
+      const ok = list.map((w, i) => {
+        const start = rebase(w?.start), end = rebase(w?.end);
+        if (!w || start === null || end === null) return null;
+        const lv = (x) => (LEVELS.includes(x) ? x : "light");
+        const o = { ...w, id: w.id || `s_${siteId}_${i}`, area: Number(w.area) || 1, start, end, noise: lv(w.noise), dust: lv(w.dust) };
+        if (siteId === "site-a" && o.type === WALL_HACK) { o.noise = "light"; o.dust = "light"; }
+        return o;
+      }).filter(Boolean);
+      return ok.length ? ok : demoSchedule(siteId);
+    };
 
     const STATUS = {
       green: { label: "Normal", hex: "#16a34a", pill: "bg-green-100 text-green-800", iconName: "CheckCircle2", iconCls: "text-green-600" },
@@ -101,27 +154,35 @@
     const workState = (w, now = clock()) => (w.end <= now ? "done" : w.start <= now ? "active" : "upcoming");
     const fmt = (ms) => new Date(ms).toLocaleTimeString("en-MY", { hour: "2-digit", minute: "2-digit", hour12: true });
 
-    // Maps the ESP32 Live Telemetry dynamically to "Area 1" for UI display without needing the randomizer
+    const okNum = (x) => x !== null && x !== undefined && x !== "" && Number.isFinite(Number(x));
+
+    // Maps the ESP32 live telemetry to "Area 1" for display
     const getAreas = (site) => {
       const list = site.areas && site.areas.length > 0 ? site.areas : [{ id: 1 }];
       return list.map(a => ({
         ...a,
-        pm25: a.id === 1 ? (site.live?.dust || 0) : (a.pm25 || 0),
-        pm10: a.id === 1 ? Math.round((site.live?.dust || 0) * 1.2) : (a.pm10 || 0),
-        db: a.id === 1 ? (site.live?.noise || 0) : (a.db || 0),
-        mist: a.id === 1 ? !!site.live?.pump : !!a.mist
+        pm25: a.id === 1 ? (Number(site.live?.dust) || 0) : (a.pm25 || 0),
+        pm10: a.id === 1 ? Math.round((Number(site.live?.dust) || 0) * 1.2) : (a.pm10 || 0),
+        db: a.id === 1 ? (Number(site.live?.noise) || 0) : (a.db || 0),
+        mist: a.id === 1 ? !!site.live?.pump : !!a.mist,
+        pre: a.id === 1 ? (okNum(site.pre) && Number(site.pre) > 0 ? Number(site.pre) : null) : (okNum(a.pre) && Number(a.pre) > 0 ? Number(a.pre) : null),
       }));
     };
 
     const check = (site, a, c, now = clock()) => {
       const works = (site.config?.schDetailed || []).filter((w) => w.area === a.id && workState(w, now) === "active");
+      const hasWork = works.length > 0;
       const noiseLvl = maxLvl(works.map((w) => w.noise));
       const dustLvl = maxLvl(works.map((w) => w.dust));
-      const noiseLimit = c.levels[noiseLvl].noise, dustLimit = c.levels[dustLvl].dust;
-      const noiseBreach = a.db > noiseLimit, dustBreach = a.pm25 > dustLimit;
+      // With active work: the scheduled level limit applies. Without: only the absolute ceiling.
+      const noiseLimit = hasWork ? c.levels[noiseLvl].noise : c.ceiling.noise;
+      const dustLimit = c.levels[dustLvl].dust;   // expected band, also basis for the misting stop target
+      const dustCeiling = c.ceiling.dust;
+      const noiseBreach = a.db > c.ceiling.noise || (hasWork && a.db > noiseLimit);
+      const dustBreach = a.pm25 > dustCeiling || (hasWork && a.pm25 > dustLimit);
       const dustTarget = Math.round(dustLimit * (1 - c.mistMargin / 100));
       const mist = !!a.mist;
-      return { works, noiseLvl, dustLvl, noiseLimit, dustLimit, dustTarget, noiseBreach, dustBreach, mist, status: noiseBreach ? "red" : dustBreach || mist ? "amber" : "green" };
+      return { works, hasWork, noiseLvl, dustLvl, noiseLimit, dustLimit, dustCeiling, dustTarget, noiseBreach, dustBreach, mist, status: noiseBreach ? "red" : dustBreach || mist ? "amber" : "green" };
     };
 
     const siteStatus = (s, c) => getAreas(s).map((a) => check(s, a, c).status).reduce((w, x) => (RANK[x] > RANK[w] ? x : w), "green");
@@ -147,7 +208,7 @@
     }
 
     function Meter({ iconName, label, value, unit, limit, sub, caption }) {
-      const ratio = value / limit;
+      const ratio = limit > 0 ? value / limit : 0;
       const color = ratio >= 1 ? "bg-red-500" : ratio >= 0.8 ? "bg-yellow-500" : "bg-green-500";
       return (
         <div className={`${card} p-4 sm:p-5`}>
@@ -181,6 +242,7 @@
       const [email, setEmail] = useState("");
       const [pw, setPw] = useState("");
       const [err, setErr] = useState("");
+      useEffect(() => { if (sites.length && !sites.find((s) => s.id === siteId)) setSiteId(sites[0].id); }, [sites]);
 
       const submit = () => {
         if (!email.trim() || !pw.trim()) return setErr("Enter your email and password.");
@@ -224,7 +286,7 @@
                 <Icon name="Lock" size={16} /> Sign in to Console
               </button>
             </div>
-            <p className="mt-4 text-center text-xs text-slate-400">Demo mode – any non-empty credentials work.</p>
+            <p className="mt-4 text-center text-xs text-slate-400">Demo mode – any non-empty credentials work. Front-end role selection only; not production security.</p>
           </div>
         </div>
       );
@@ -253,8 +315,10 @@
 
       useEffect(() => {
         if (!window.L || !map.current) return;
+        const ids = new Set(sites.map((s) => s.id));
+        Object.keys(markers.current).forEach((id) => { if (!ids.has(id)) { markers.current[id].remove(); delete markers.current[id]; } });
         sites.forEach((s) => {
-          if (!s.live) return;
+          if (!s.live || !okNum(s.live.lat) || !okNum(s.live.lng)) return;
           const st = siteStatus(s, c);
           const icon = pin(window.L, STATUS[st].hex);
           const tip = `<b>${s.live.name}</b><br/>${STATUS[st].label}`;
@@ -336,7 +400,8 @@
       const c = useCfg();
       const ck = check(site, a, c);
       const mist = ck.mist;
-      const cut = mist && a.pre ? Math.max(0, Math.round((1 - a.pm25 / a.pre) * 100)) : 0;
+      const pre = a.pre; // fixed for the whole misting episode (captured when the pump turned on)
+      const cutPct = pre ? Math.round(((pre - a.pm25) / pre) * 100) : null;
       const verdict = (bad) => (
         <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${bad ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}`}>
           {bad ? "Breached" : "Within limit"}
@@ -374,9 +439,9 @@
                     </div>
                   </div>
                 );
-              }) : <div className="mt-3 font-semibold">No active work – baseline (Light) limits apply</div>}
+              }) : <div className="mt-3 font-semibold">No active construction in this area – sensor readings are still live and may come from non-construction sources</div>}
               <div className="mt-4 text-xs text-slate-500">
-                Expected for this area: Noise {LVL[ck.noiseLvl].label} ≤{ck.noiseLimit} dB · Dust {LVL[ck.dustLvl].label} ≤{ck.dustLimit} µg/m³
+                {ck.hasWork ? `Expected for this area: Noise ${LVL[ck.noiseLvl].label} ≤${ck.noiseLimit} dB · Dust ${LVL[ck.dustLvl].label} ≤${ck.dustLimit} µg/m³` : `Only the absolute ceilings apply: ${c.ceiling.noise} dB noise · ${c.ceiling.dust} µg/m³ PM2.5`}
               </div>
             </section>
 
@@ -388,7 +453,7 @@
                 {verdict(ck.dustBreach)}
               </div>
               <div className="text-4xl font-bold tabular-nums">{a.pm25}<span className="ml-1 text-sm font-normal text-slate-500">µg/m³ PM2.5</span></div>
-              <div className="text-sm text-slate-500">PM10: {a.pm10} µg/m³ · Limit {ck.dustLimit}</div>
+              <div className="text-sm text-slate-500">PM10: {a.pm10} µg/m³ · Expected {LVL[ck.dustLvl].label} ≤ {ck.dustLimit} µg/m³</div>
               <div className="mt-4 rounded-lg bg-orange-50 p-3">
                 <div className="text-xs font-semibold uppercase text-slate-500">Automated Mitigation</div>
                 <div className="mt-1 flex items-center gap-2 font-medium">
@@ -396,21 +461,7 @@
                   Water Misting: {mist ? `Active (PM2.5 Threshold Target: ≤ ${ck.dustTarget} µg/m³)` : "Standby"}
                 </div>
               </div>
-              <div className="mt-4">
-                <div className="text-xs font-semibold uppercase text-slate-500">Post-Mitigation Impact</div>
-                {mist ? (
-                  <>
-                    {[["Before misting", a.pre || "Unknown", "bg-red-500"], ["Current", a.pm25, "bg-green-500"]].map(([l, v, col]) => (
-                      <div key={l} className="mt-2">
-                        <div className="flex justify-between text-xs"><span>{l}</span><span className="tabular-nums">{v} µg/m³</span></div>
-                        <div className="mt-1 h-2.5 rounded-full bg-orange-50"><div className={`h-full rounded-full ${col}`} style={{ width: `${Math.min(100, (v / (a.pre||100)) * 100)}%` }} /></div>
-                      </div>
-                    ))}
-                    <div className="mt-2 text-sm font-semibold text-green-700">Dust suppression active</div>
-                    <div className="text-xs text-slate-500">Misting stops at ≤ {ck.dustTarget} µg/m³ (threshold {ck.dustLimit}, minus {c.mistMargin}%)</div>
-                  </>
-                ) : <div className="mt-1 text-sm text-slate-500">No misting needed – within expected limits.</div>}
-              </div>
+              
             </section>
 
             <section className="rounded-xl border border-orange-100 p-4">
@@ -420,8 +471,8 @@
                 </h3>
                 {verdict(ck.noiseBreach)}
               </div>
-              <div className={`text-4xl font-bold tabular-nums ${ck.noiseBreach ? "text-red-600" : ""}`}>{a.db}<span className="ml-1 text-sm font-normal text-slate-500">dB(A)</span></div>
-              <div className="text-sm text-slate-500">Limit for {LVL[ck.noiseLvl].label} work: {ck.noiseLimit} dB(A)</div>
+              <div className={`text-4xl font-bold tabular-nums ${ck.noiseBreach ? "text-red-600" : ""}`}>{a.db}<span className="ml-1 text-sm font-normal text-slate-500">dB</span></div>
+              <div className="text-sm text-slate-500">{ck.hasWork ? `Limit for ${LVL[ck.noiseLvl].label} work: ${ck.noiseLimit} dB` : `No active construction · absolute ceiling ${ck.noiseLimit} dB`}</div>
               <label className="mt-4 flex items-center gap-2 rounded-lg bg-orange-50 p-3 text-sm font-medium">
                 <input type="checkbox" checked={ck.noiseBreach} readOnly className="h-4 w-4 accent-orange-500" />
                 {ck.noiseBreach ? "Alert automatically dispatched to Site Manager" : "No alert required"}
@@ -635,6 +686,7 @@
       
       const { n, d } = peakOf(site);
       const cn = check(site, n, c), cd = check(site, d, c);
+      const activeWorks = getAreas(site).reduce((t, a) => t + check(site, a, c).works.length, 0);
       const selected = getAreas(site).find((a) => a.id === openId);
       const ev = selected && events.find((e) => e.siteId === site.id && e.area === selected.id && e.kind === "noise" && !e.end);
 
@@ -663,11 +715,20 @@
             <StatusPill status={siteStatus(site, c)} />
           </div>
 
-          {/* METERS MOVED TO TOP */}
+          {activeWorks === 0 && (
+            <div className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-100 p-4 text-sm text-orange-900">
+              <Icon name="Info" size={18} className="mt-0.5" />
+              <div>
+                <div className="font-semibold">No active construction right now</div>
+                <div>Noise and dust readings below are still live. High values can occur without construction (traffic, weather, nearby activity). Only the absolute ceilings ({c.ceiling.noise} dB · {c.ceiling.dust} µg/m³) apply.</div>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-6">
-            <Meter iconName="Volume2" label="Noise" value={n.db} unit="dB(A)" limit={cn.noiseLimit} sub="Peak across all floors" caption={`Source: Area ${n.id} · expected ${LVL[cn.noiseLvl].label}`} />
-            <Meter iconName="Wind" label="Dust PM2.5 / PM10" value={d.pm25} unit="µg/m³" limit={cd.dustLimit} sub={`PM10: ${d.pm10} µg/m³`} caption={`Source: Area ${d.id} · expected ${LVL[cd.dustLvl].label}`} />
+            <Meter iconName="Volume2" label="Noise" value={n.db} unit="dB" limit={cn.noiseLimit} sub="Peak across all floors" caption={`Source: Area ${n.id} · expected ${LVL[cn.noiseLvl].label}`} />
+            <Meter iconName="Wind" label="Dust PM2.5 / PM10" value={d.pm25} unit="µg/m³" limit={cd.dustCeiling} sub={`PM10: ${d.pm10} µg/m³`} caption={`Source: Area ${d.id} · expected ${LVL[cd.dustLvl].label}`} />
           </div>
+
 
           {/* ACTUATOR CONTROL MOVED BELOW METERS */}
           <section className="mb-6">
@@ -704,7 +765,7 @@
             <div className={`${card} divide-y divide-orange-100 overflow-hidden`}>
               {getAreas(site).map((a) => {
                 const ck = check(site, a, c), S = STATUS[ck.status], on = openId === a.id;
-                const sub = ck.noiseBreach ? `Noise breach · ${a.db} dB (limit ${ck.noiseLimit})` : ck.dustBreach ? `Dust breach · misting active (limit ${ck.dustLimit})` : ck.mist ? `Misting until PM2.5 ≤ ${ck.dustTarget} µg/m³` : "Within limits";
+                const sub = ck.noiseBreach ? `Noise breach · ${a.db} dB (limit ${ck.noiseLimit})` : ck.dustBreach ? `PM2.5 ${a.pm25} µg/m³ (limit ${ck.hasWork ? ck.dustLimit : ck.dustCeiling})` : ck.mist ? `Misting until PM2.5 ≤ ${ck.dustTarget} µg/m³` : "Within limits";
                 return (
                   <Fragment key={a.id}>
                     <button onClick={() => setOpenId(on ? null : a.id)} className={`flex w-full items-center gap-4 px-4 py-3.5 text-left hover:bg-orange-50 ${on ? "bg-orange-50" : ""}`}>
@@ -874,42 +935,87 @@
      *  CONFIG PAGE (THRESHOLDS)
      * ------------------------------------------------------------------ */
     function ConfigPage({ cfg, setCfg }) {
-      const setLvl = (l, k, v) => setCfg({ ...cfg, levels: { ...cfg.levels, [l]: { ...cfg.levels[l], [k]: Number(v) || 0 } } });
+      const [draft, setDraft] = useState(cfg);
+      const [saved, setSaved] = useState(false);
+      const [err, setErr] = useState("");
+      const key = JSON.stringify(cfg);
+      useEffect(() => { setDraft(cfg); }, [key]);
+      const dirty = JSON.stringify(draft) !== key;
+      const setLvl = (l, k, v) => setDraft({ ...draft, levels: { ...draft.levels, [l]: { ...draft.levels[l], [k]: v } } });
+      const setCeil = (k, v) => setDraft({ ...draft, ceiling: { ...draft.ceiling, [k]: v }, levels: { ...draft.levels, heavy: { ...draft.levels.heavy, [k]: v } } });
+
+      const save = () => {
+        const vals = [draft.mistMargin, draft.ceiling.noise, draft.ceiling.dust, draft.levels.light.noise, draft.levels.light.dust, draft.levels.moderate.noise, draft.levels.moderate.dust];
+        if (vals.some((v) => v === "" || !Number.isFinite(Number(v)))) return setErr("Fill in every value with a number.");
+        const n = normalizeCfg(draft);
+        if (!(n.levels.light.noise < n.levels.moderate.noise && n.levels.moderate.noise < n.ceiling.noise)) return setErr("Noise: Light < Moderate < Breach ceiling.");
+        if (!(n.levels.light.dust < n.levels.moderate.dust && n.levels.moderate.dust < n.ceiling.dust)) return setErr("Dust: Light < Moderate < Breach ceiling.");
+        if (n.mistMargin < 0 || n.mistMargin > 100) return setErr("Reduction below threshold must be 0–100%.");
+        setErr(""); setCfg(n); setSaved(true); setTimeout(() => setSaved(false), 3000);
+      };
+      const reset = () => {
+        if (!window.confirm("Reset all thresholds to their default values? This replaces the saved configuration.")) return;
+        setErr(""); setDraft(DEFAULT_CFG); setCfg(DEFAULT_CFG);
+      };
+      const num = (val, on) => <input type="number" value={val} onChange={(e) => on(e.target.value)} className={`${field} w-28`} />;
+      const sym = "text-slate-500 mx-2";
+      const badge = (l) => <span className={`rounded-md border px-2.5 py-1 text-xs font-bold ${LVL[l].cls}`}>{LVL[l].label}</span>;
+      const rowCell = (l, k) => {
+        const u = <span className="ml-1.5 text-xs text-slate-500">{k === "noise" ? "dB" : "µg/m³"}</span>;
+        if (l === "light") return <div className="flex items-center"><span className={sym}>≤</span>{num(draft.levels.light[k], (v) => setLvl("light", k, v))}{u}</div>;
+        if (l === "moderate") return <div className="flex items-center"><b>{draft.levels.light[k]}</b><span className={sym}>–</span>{num(draft.levels.moderate[k], (v) => setLvl("moderate", k, v))}{u}</div>;
+        return (
+          <div>
+            <div className="flex items-center"><span className={sym}>&gt;</span><b>{draft.levels.moderate[k]}</b>{u}</div>
+            <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">Breach ceiling (above) {num(draft.ceiling[k], (v) => setCeil(k, v))}{u}</div>
+          </div>
+        );
+      };
+
       return (
         <div className="space-y-4">
           <div>
             <h1 className="text-2xl font-bold">Threshold Configuration</h1>
-            <p className="text-sm text-slate-500">Administrator only. Each scheduled work is tagged Light, Moderate or Heavy; exceeding that level's threshold counts as a breach.</p>
+            <p className="text-sm text-slate-500">Administrator only. Each scheduled work is tagged Light, Moderate or Heavy. Going above the range of the active work counts as a breach; the breach ceiling applies at all times.</p>
           </div>
-          <div className={`${card} space-y-5 p-5`}>
-            <h3 className="font-semibold text-orange-600">Expected thresholds by work level</h3>
+          <div className={`${card} space-y-6 p-5`}>
+            <h3 className="text-lg font-semibold text-orange-600">Expected ranges by work level</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="text-xs uppercase text-slate-500">
-                  <tr><th className="py-2 pr-4">Level</th><th className="pr-4">Max noise (dB)</th><th>Max dust PM2.5 (µg/m³)</th></tr>
+                  <tr><th className="py-2 pr-4">Level</th><th className="pr-4">Noise range <span className="normal-case">(dB)</span></th><th>Dust PM2.5 range <span className="normal-case">(µg/m³)</span></th></tr>
                 </thead>
                 <tbody>
                   {LEVELS.map((l) => (
-                    <tr key={l} className="border-t border-orange-100">
-                      <td className="py-3 pr-4"><span className={`rounded-md border px-2 py-1 text-xs font-bold ${LVL[l].cls}`}>{LVL[l].label}</span></td>
-                      <td className="pr-4"><input type="number" value={cfg.levels[l].noise} onChange={(e) => setLvl(l, "noise", e.target.value)} className={`${field} max-w-[140px]`} /></td>
-                      <td><input type="number" value={cfg.levels[l].dust} onChange={(e) => setLvl(l, "dust", e.target.value)} className={`${field} max-w-[140px]`} /></td>
+                    <tr key={l} className="border-t border-orange-100 align-top">
+                      <td className="py-3 pr-4">{badge(l)}</td>
+                      <td className="py-3 pr-4">{rowCell(l, "noise")}</td>
+                      <td className="py-3">{rowCell(l, "dust")}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <h3 className="font-semibold text-orange-600">Misting</h3>
-            <p className="text-sm text-slate-500">Misting has no fixed duration. It starts when dust exceeds its threshold and keeps running until PM2.5 has dropped below the threshold by this margin.</p>
-            <label className="block max-w-[260px] text-xs font-semibold uppercase text-slate-500">Reduction below threshold (%)
-              <input type="number" value={cfg.mistMargin} onChange={(e) => setCfg({ ...cfg, mistMargin: Number(e.target.value) || 0 })} className={`${field} mt-1 font-normal`} />
-            </label>
-            <button onClick={() => setCfg(DEFAULT_CFG)} className="rounded-lg border border-orange-300 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-50 transition">Reset to defaults</button>
+            <p className="text-xs text-slate-500">Dust ranges are compared with the live PM2.5 reading. Going above the range of the active work counts as a breach; the breach ceiling applies at all times.</p>
+            <div>
+              <h3 className="text-lg font-semibold text-orange-600">Misting</h3>
+              <p className="mt-2 text-sm text-slate-500">Misting has no fixed duration. It starts when dust exceeds its threshold and keeps running until PM2.5 has dropped below the threshold by this margin.</p>
+              <label className="mt-3 block max-w-[260px] text-xs font-semibold uppercase text-slate-500">Reduction below threshold (%)
+                <input type="number" value={draft.mistMargin} onChange={(e) => setDraft({ ...draft, mistMargin: e.target.value })} className={`${field} mt-1 font-normal`} />
+              </label>
+            </div>
+            {err && <div className="text-sm font-medium text-red-600">{err}</div>}
+            <div className="flex flex-wrap items-center gap-3">
+              <button onClick={save} disabled={!dirty} className={`${btn} disabled:opacity-50`}>Save changes</button>
+              <button onClick={reset} className="rounded-lg border border-orange-300 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-50 transition">Reset to defaults</button>
+              {saved && <span className="text-sm font-bold text-green-600">✓ Saved</span>}
+              {dirty && !saved && <span className="text-xs text-slate-500">Unsaved changes</span>}
+            </div>
           </div>
         </div>
       );
     }
-    
+
     /* ------------------------------------------------------------------ *
      *  SCHEDULE MANAGER (ADMIN)
      * ------------------------------------------------------------------ */
@@ -1070,47 +1176,79 @@
       useEffect(() => { eventsRef.current = events; }, [events]);
       useEffect(() => { cfgRef.current = cfg; }, [cfg]);
 
+      const mistRef = useRef({});     // siteId -> { pre } for the current misting episode
+      const seenRef = useRef({});     // siteId -> pump state at last snapshot
+      const pendingRef = useRef({});  // siteId_area -> time an incident write was sent
+
+      const prepare = (k, raw, idx) => {
+        const obj = { id: k, ...raw, live: { ...(raw.live || {}) }, config: { ...(raw.config || {}) } };
+        // Keep valid coordinates from Firebase; only fall back when they are missing/invalid.
+        const lat = Number(obj.live.lat), lng = Number(obj.live.lng);
+        const valid = okNum(obj.live.lat) && okNum(obj.live.lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
+        if (!valid) { const f = FALLBACK_COORDS[k] || [CENTER[0] - 0.001 * idx, CENTER[1] + 0.001 * idx]; obj.live.lat = f[0]; obj.live.lng = f[1]; }
+        if (!obj.live.name) obj.live.name = k;
+        obj.config.schDetailed = normSchedule(k, obj.config.schDetailed);
+        // Before-misting reading: captured once when the pump turns on, then held until it turns off.
+        const dust = Number(obj.live.dust) || 0, on = !!obj.live.pump, ep = mistRef.current[k];
+        if (on && !ep) {
+          const stored = okNum(obj.live.preMist) && Number(obj.live.preMist) > 0 ? Number(obj.live.preMist) : null;
+          mistRef.current[k] = { pre: stored !== null ? stored : dust > 0 ? dust : null };
+        } else if (!on && ep) delete mistRef.current[k];
+        seenRef.current[k] = on;
+        obj.pre = mistRef.current[k]?.pre ?? null;
+        return obj;
+      };
+      const buildSites = (data) => Object.keys(data || {}).filter((k) => data[k] && typeof data[k] === "object").map((k, i) => prepare(k, data[k], i));
+
       useEffect(() => {
-        const setup = async () => {
+        let done = false;
+        const useDemo = () => { if (!sitesRef.current.length) setSites(buildSites(DEMO_SITES)); };
+        const finish = () => { if (!done) { done = true; setIsLoaded(true); } };
+        const timer = setTimeout(() => { useDemo(); finish(); }, 5000); // Firebase slow/unreachable -> demo data
+        let wired = false;
+
+        const setup = () => {
+          if (wired || !window.FirebaseAPI) return;
+          wired = true;
           const { db, ref, onValue } = window.FirebaseAPI;
 
           onValue(ref(db, 'buildwatch/sites'), (s) => {
-            if (s.exists()) {
-              const data = s.val();
-              const sitesArray = Object.keys(data).map(k => {
-                let obj = { id: k, ...data[k] };
-                
-                // Forces coordinates to match the Flutter app's internal clustering logic
-                let sx = 3.2065;
-                let sy = 101.4945;
-                if (k === 'site-a') { sx += 0.0020; sy += 0.0005; }
-                else if (k === 'site-b') { sx -= 0.0010; sy -= 0.0010; }
-                else if (k === 'site-c') { sx -= 0.0025; sy += 0.0020; }
-                
-                if (!obj.live) obj.live = {};
-                obj.live.lat = sx;
-                obj.live.lng = sy;
-                return obj;
-              });
-              setSites(sitesArray);
-            }
-          });
+            if (s.exists() && s.val() && typeof s.val() === "object") setSites(buildSites(s.val()));
+            else useDemo();
+            finish();
+          }, () => { useDemo(); finish(); });
           onValue(ref(db, 'buildwatch/events'), (s) => {
-            if (s.exists()) {
-              const data = s.val();
-              setEvents(Object.keys(data).map(k => data[k]));
-            }
+            const data = s.exists() ? s.val() : null;
+            setEvents(data && typeof data === "object" ? Object.keys(data).filter((k) => data[k] && typeof data[k] === "object").map(k => ({ id: k, ...data[k] })) : []);
           });
-          onValue(ref(db, 'buildwatch/cfg'), (s) => {
-            if (s.exists()) setCfg(s.val());
-          });
-          setIsLoaded(true);
+          onValue(ref(db, 'buildwatch/cfg'), (s) => { setCfg(normalizeCfg(s.exists() ? s.val() : null)); });
         };
 
         if (window.FirebaseAPI) setup();
-        else window.addEventListener('firebase-ready', setup);
-        return () => window.removeEventListener('firebase-ready', setup);
+        window.addEventListener('firebase-ready', setup);
+        return () => { clearTimeout(timer); window.removeEventListener('firebase-ready', setup); };
       }, []);
+
+      // Dust incidents (admin session only, so several open consoles do not each log the same breach).
+      useEffect(() => {
+        if (!window.FirebaseAPI || session?.role !== "admin" || !sites.length) return;
+        const now = clock(), writes = {};
+        sites.forEach((s) => getAreas(s).forEach((a) => {
+          const ck = check(s, a, cfg, now), pk = `${s.id}_${a.id}`;
+          const anyOpen = events.find((e) => e.kind === "dust" && e.siteId === s.id && e.area === a.id && !e.end);
+          if (anyOpen) delete pendingRef.current[pk];
+          if (ck.dustBreach && !anyOpen) {
+            if (Date.now() - (pendingRef.current[pk] || 0) < 8000) return;   // write already in flight
+            pendingRef.current[pk] = Date.now();
+            const id = `D-${now.toString(36).toUpperCase()}-${s.id.slice(-1).toUpperCase()}${a.id}`;
+            writes[`buildwatch/events/${id}`] = { id, siteId: s.id, area: a.id, kind: "dust", basis: "pm25", start: now, peak: a.pm25, limit: ck.dustLimit, level: ck.dustLvl };
+          } else if (anyOpen && (anyOpen.basis === "pm25" || anyOpen.basis === "spike")) {
+            if (!ck.dustBreach) writes[`buildwatch/events/${anyOpen.id}/end`] = now;
+            else if (a.pm25 > (Number(anyOpen.peak) || 0)) writes[`buildwatch/events/${anyOpen.id}/peak`] = a.pm25;
+          }
+        }));
+        if (Object.keys(writes).length) { const { db, ref, update } = window.FirebaseAPI; update(ref(db), writes).catch((e) => console.error("Incident write failed:", e)); }
+      }, [sites, events, cfg, session]);
 
       const isAdmin = session?.role === "admin";
       const visible = useMemo(() => (isAdmin ? sites : sites.filter((s) => s.id === session?.siteId)), [isAdmin, sites, session]);
@@ -1127,8 +1265,10 @@
       };
 
       const handleSetCfg = (newCfg) => {
+        const n = normalizeCfg(newCfg);
+        setCfg(n);
         if (!window.FirebaseAPI) return;
-        window.FirebaseAPI.set(window.FirebaseAPI.ref(window.FirebaseAPI.db, 'buildwatch/cfg'), newCfg);
+        window.FirebaseAPI.set(window.FirebaseAPI.ref(window.FirebaseAPI.db, 'buildwatch/cfg'), n);
       };
       
       const handleSaveSiteConfig = (siteId, newConfig) => {
